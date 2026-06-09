@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { STATUSES, REQUEST_TYPES } from '../data.js'
-import { Icon, Badge, CategoryBadge, SLAIndicator } from '../components.jsx'
+import { STATUSES, REQUEST_TYPES } from './data.js'
+import { Icon, Badge, CategoryBadge, SLAIndicator } from './components.jsx'
 
 const TYPE_ICON  = { submitted: 'requests', assign: 'user', info: 'bell', upload: 'attach', progress: 'sla', escalate: 'escalate', complete: 'check' }
 const TYPE_COLOR = { submitted: '#3b82f6', assign: '#8b5cf6', info: '#f59e0b', upload: '#06b6d4', progress: '#10b981', escalate: '#ef4444', complete: '#059669' }
