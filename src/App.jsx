@@ -14,6 +14,7 @@ import RolesPage from './pages/admin/RolesPage.jsx'
 import CaseTypeConfig from './pages/admin/CaseTypeConfig.jsx'
 import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
+import EmailIntake from './pages/EmailIntake.jsx'
 
 export default function App() {
   const [user, setUser]               = useState(null)
@@ -70,6 +71,12 @@ export default function App() {
           <button onClick={()=>{ setOpenCase(null); navigate('cases') }} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', background:T.orange, color:'#fff', border:'none', borderRadius:7, cursor:'pointer', fontWeight:600, fontSize:12, fontFamily:'inherit' }}>
             <Icon name="plus" size={14} color="#fff"/> New Case
           </button>
+          {!isEmployer && (
+            <button onClick={()=>navigate('email_intake')} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', background:'#fff', color:T.navy, border:`1px solid ${T.border}`, borderRadius:7, cursor:'pointer', fontWeight:600, fontSize:12, fontFamily:'inherit' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={T.navy}><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+              Case from Email
+            </button>
+          )}
           <div style={{ position:'relative', display:'flex', cursor:'pointer' }}>
             <Icon name="bell" size={19} color={T.gray}/>
             {escalatedCt>0 && (
@@ -93,6 +100,13 @@ export default function App() {
           )}
           {page==='billing' && (
             <BillingWorkbench {...sharedProps} onUpdateBilling={setBillingTasks}/>
+          )}
+          {page==='email_intake' && (
+            <EmailIntake
+              caseTypes={caseTypes} categories={categories}
+              employers={employers} users={users} currentUser={user}
+              onCaseCreated={c => { addCase(c); navigate('cases') }}
+            />
           )}
           {page==='employers'  && <EmployersPage {...sharedProps} onNav={navigate}/>}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}

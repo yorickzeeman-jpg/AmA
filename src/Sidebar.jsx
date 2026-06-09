@@ -6,6 +6,7 @@ const INTERNAL_NAV = [
   { id:'dashboard',       label:'Dashboard',        icon:'dashboard'  },
   { id:'cases',           label:'Employer Cases',   icon:'cases'      },
   { id:'internal_cases',  label:'Internal Cases',   icon:'audit'      },
+  { id:'email_intake',    label:'Case from Email',  icon:'send'       },
   { id:'billing',         label:'Billing Workbench',icon:'sla'        },
   { id:'employers',       label:'Employers',        icon:'employers'  },
   { id:'reports',         label:'Reports',          icon:'reports'    },
@@ -37,6 +38,8 @@ export default function Sidebar({ user, page, onNav, onLogout, open }) {
   const nav        = isEmployer ? EMPLOYER_NAV : INTERNAL_NAV.filter(item => {
     if (item.id === 'billing' && !isGM && !isBilling) return false
     if (item.id === 'internal_cases' && isEmployer) return false
+    if (item.id === 'email_intake' && isEmployer) return false
+    if (item.id === 'email_intake' && isBilling && !isGM) return false
     return true
   })
 

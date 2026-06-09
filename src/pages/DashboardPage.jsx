@@ -48,6 +48,24 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
         </p>
       </div>
 
+      {/* Quick actions — internal staff only */}
+      {(isAdmin || isGM) && (
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button onClick={()=>onNav('cases')} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px', background:'#fff', border:`1px solid ${T.border}`, borderRadius:9, cursor:'pointer', fontSize:12, fontWeight:600, color:T.text, fontFamily:'inherit', transition:'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.orange; e.currentTarget.style.background=T.orangeL}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background='#fff'}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill={T.orange}><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            New Case
+          </button>
+          <button onClick={()=>onNav('email_intake')} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px', background:T.orangeL, border:`1px solid ${T.orange}40`, borderRadius:9, cursor:'pointer', fontSize:12, fontWeight:700, color:T.orange, fontFamily:'inherit', transition:'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=T.orange; e.currentTarget.style.color='#fff'}}
+            onMouseLeave={e=>{e.currentTarget.style.background=T.orangeL; e.currentTarget.style.color=T.orange}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+            📧 Case from Email
+          </button>
+        </div>
+      )}
+
       {/* KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:14 }}>
         <KPI label="Open Cases"     value={open.length}      icon="cases"   color={T.blue}  trend={3} />
