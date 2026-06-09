@@ -1,4 +1,4 @@
-import { EMPLOYERS } from '../data.js'
+import { EMPLOYERS } from './data.js'
 
 export default function EmployersPage({ requests, onNavigate }) {
   return (
