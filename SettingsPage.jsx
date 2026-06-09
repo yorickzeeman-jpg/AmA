@@ -1,4 +1,4 @@
-import { Icon } from '../components.jsx'
+import { Icon } from './components.jsx'
 
 const SETTINGS = [
   { title: 'Users & Access',       desc: 'Manage internal users, roles and permissions',                  icon: 'user'     },
