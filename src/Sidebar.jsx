@@ -35,11 +35,11 @@ export default function Sidebar({ user, page, onNav, onLogout, open }) {
   const isEmployer = ['employer_admin','employer_user'].includes(user.role)
   const isGM       = user.role === 'general_manager'
   const isBilling  = user.role === 'billing_admin'
+  const canEmailIntake = ['general_manager','administrator'].includes(user.role)
   const nav        = isEmployer ? EMPLOYER_NAV : INTERNAL_NAV.filter(item => {
     if (item.id === 'billing' && !isGM && !isBilling) return false
     if (item.id === 'internal_cases' && isEmployer) return false
-    if (item.id === 'email_intake' && isEmployer) return false
-    if (item.id === 'email_intake' && isBilling && !isGM) return false
+    if (item.id === 'email_intake' && !canEmailIntake) return false
     return true
   })
 

@@ -48,21 +48,48 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
         </p>
       </div>
 
-      {/* Quick actions — internal staff only */}
+      {/* Quick Actions — Administrator and General Manager only */}
       {(isAdmin || isGM) && (
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          <button onClick={()=>onNav('cases')} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px', background:'#fff', border:`1px solid ${T.border}`, borderRadius:9, cursor:'pointer', fontSize:12, fontWeight:600, color:T.text, fontFamily:'inherit', transition:'all .15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.orange; e.currentTarget.style.background=T.orangeL}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background='#fff'}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill={T.orange}><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-            New Case
-          </button>
-          <button onClick={()=>onNav('email_intake')} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px', background:T.orangeL, border:`1px solid ${T.orange}40`, borderRadius:9, cursor:'pointer', fontSize:12, fontWeight:700, color:T.orange, fontFamily:'inherit', transition:'all .15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background=T.orange; e.currentTarget.style.color='#fff'}}
-            onMouseLeave={e=>{e.currentTarget.style.background=T.orangeL; e.currentTarget.style.color=T.orange}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
-            📧 Case from Email
-          </button>
+        <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:12, padding:'16px 18px' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'1px', marginBottom:12 }}>Quick Actions</div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+
+            {/* New Case */}
+            <QuickAction
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>}
+              label="Create New Case"
+              color={T.orange}
+              onClick={()=>onNav('cases')}
+            />
+
+            {/* Internal Case */}
+            <QuickAction
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>}
+              label="Create Internal Case"
+              color={T.blue}
+              onClick={()=>onNav('internal_cases')}
+            />
+
+            {/* Case from Email — admin/GM only */}
+            <QuickAction
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>}
+              label="📧 Case from Email"
+              color={T.navy}
+              highlight
+              onClick={()=>onNav('email_intake')}
+            />
+
+            {/* Billing Task — GM and billing-accessible admins */}
+            {(isGM) && (
+              <QuickAction
+                icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>}
+                label="Create Billing Task"
+                color={T.purple}
+                onClick={()=>onNav('billing')}
+              />
+            )}
+
+          </div>
         </div>
       )}
 
@@ -196,5 +223,38 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
 
       </div>
     </div>
+  )
+}
+
+// ─── Quick Action button component ───────────────────────────────────────────
+function QuickAction({ icon, label, color, onClick, highlight }) {
+  const base = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '9px 16px',
+    background: highlight ? color : '#fff',
+    border: `1px solid ${highlight ? color : T.border}`,
+    borderRadius: 9, cursor: 'pointer',
+    fontSize: 12, fontWeight: 700,
+    color: highlight ? '#fff' : T.text,
+    fontFamily: 'inherit', transition: 'all .15s',
+  }
+  return (
+    <button
+      onClick={onClick}
+      style={base}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = color
+        e.currentTarget.style.color = '#fff'
+        e.currentTarget.style.borderColor = color
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = highlight ? color : '#fff'
+        e.currentTarget.style.color = highlight ? '#fff' : T.text
+        e.currentTarget.style.borderColor = highlight ? color : T.border
+      }}
+    >
+      <span style={{ color: 'inherit', display: 'flex' }}>{icon}</span>
+      {label}
+    </button>
   )
 }
