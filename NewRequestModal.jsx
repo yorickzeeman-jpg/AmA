@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { EMPLOYERS, REQUEST_TYPES, PRIORITIES } from '../data.js'
-import { Icon } from '../components.jsx'
+import { EMPLOYERS, REQUEST_TYPES, PRIORITIES } from './data.js'
+import { Icon } from './components.jsx'
 
 export default function NewRequestModal({ onClose, onSubmit, currentUser, preEmployer }) {
   const [form, setForm] = useState({
