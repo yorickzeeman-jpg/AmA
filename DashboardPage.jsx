@@ -1,4 +1,4 @@
-import { KPICard, Badge, SLAIndicator, Icon, CategoryBadge } from '../components.jsx'
+import { KPICard, Badge, SLAIndicator, Icon, CategoryBadge } from './components.jsx'
 import { REQUEST_TYPES } from '../data.js'
 
 export default function DashboardPage({ requests, currentUser, onOpenRequest, onNavigate, onNewRequest }) {
