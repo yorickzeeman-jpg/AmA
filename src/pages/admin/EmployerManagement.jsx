@@ -21,7 +21,7 @@ export default function EmployerManagement({ employers, users, onUpdateEmployers
     onUpdateEmployers(employers.map(e => e.id===id ? { ...e, status: e.status==='active'?'review':'active' } : e))
   }
 
-  const consultants = users.filter(u => ['consultant','ops_manager'].includes(u.role) && u.status==='active')
+  const consultants = users.filter(u => ['administrator','general_manager'].includes(u.role) && u.status==='active')
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16, animation:'fadeIn .3s ease' }}>
@@ -32,7 +32,7 @@ export default function EmployerManagement({ employers, users, onUpdateEmployers
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(310px,1fr))', gap:14 }}>
         {employers.map(emp => {
-          const con = users.find(u => u.id===emp.consultant)
+          const con = null
           return (
             <div key={emp.id} style={{ background:'#fff', borderRadius:12, border:`1px solid ${T.border}`, padding:18, transition:'all .15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor=T.green; e.currentTarget.style.boxShadow='0 4px 16px rgba(26,61,43,0.08)' }}

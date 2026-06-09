@@ -152,10 +152,10 @@ export function Field({ label, children }) {
 }
 export function Btn({ children, onClick, variant='primary', small, style:sx, disabled }) {
   const variants = {
-    primary: { background:T.green, color:'#fff', border:'none' },
+    primary: { background:T.navy||'#07122a', color:'#fff', border:'none' },
     secondary:{ background:T.white, color:T.text, border:`1px solid ${T.border}` },
     danger:  { background:T.red,   color:'#fff', border:'none' },
-    ghost:   { background:'none',  color:T.green, border:'none', padding:0 },
+    ghost:   { background:'none',  color:T.orange||'#e8680a', border:'none', padding:0 },
   }
   return (
     <button onClick={onClick} disabled={disabled} style={{ display:'inline-flex', alignItems:'center', gap:6, padding:small?'6px 12px':'9px 18px', borderRadius:8, fontSize:small?12:13, fontWeight:600, cursor:disabled?'not-allowed':'pointer', opacity:disabled?.5:1, ...variants[variant], ...sx }}>
@@ -182,7 +182,7 @@ export function Tabs({ tabs, active, onChange }) {
   return (
     <div style={{ display:'flex', borderBottom:`1px solid ${T.border}`, overflowX:'auto' }}>
       {tabs.map(t => (
-        <button key={t} onClick={() => onChange(t)} style={{ padding:'11px 16px', background:'none', border:'none', borderBottom:active===t?`2px solid ${T.green}`:'2px solid transparent', color:active===t?T.green:T.gray, fontWeight:active===t?700:500, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', marginBottom:-1 }}>
+        <button key={t} onClick={() => onChange(t)} style={{ padding:'11px 16px', background:'none', border:'none', borderBottom:active===t?`2px solid ${T.navy||'#07122a'}`:'2px solid transparent', color:active===t?T.navy||'#07122a':T.gray, fontWeight:active===t?700:500, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', marginBottom:-1 }}>
           {t}
         </button>
       ))}

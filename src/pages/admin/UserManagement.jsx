@@ -91,7 +91,7 @@ export default function UserManagement({ users, onUpdateUsers }) {
 }
 
 function UserModal({ user, onClose, onSave }) {
-  const [form, setForm] = useState(user ? { name:user.name, email:user.email, role:user.role, employer:user.employer||'' } : { name:'', email:'', role:'consultant', employer:'' })
+  const [form, setForm] = useState(user ? { name:user.name, email:user.email, role:user.role, employer:user.employer||'' } : { name:'', email:'', role:'administrator', employer:'' })
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
   const needsEmployer = ['employer_admin','employer_user'].includes(form.role)
 
