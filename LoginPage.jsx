@@ -1,5 +1,5 @@
-import { USERS } from '../data.js'
-import { Avatar } from '../components.jsx'
+import { USERS } from './data.js'
+import { Avatar } from './components.jsx'
 
 const ROLE_COLORS = {
   super_admin: '#1e3a5f', ops_manager: '#1e3a5f',
