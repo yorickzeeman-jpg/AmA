@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { STATUSES, PRIORITIES, REQUEST_TYPES, EMPLOYERS } from '../data.js'
-import { Icon, Badge, CategoryBadge, SLAIndicator } from '../components.jsx'
+import { STATUSES, PRIORITIES, REQUEST_TYPES, EMPLOYERS } from './data.js'
+import { Icon, Badge, CategoryBadge, SLAIndicator } from './components.jsx'
 
 export default function RequestsPage({ requests, currentUser, onOpenRequest, onNewRequest, initialFilters }) {
   const isExternal = ['employer_hr', 'employer_payroll'].includes(currentUser.role)
