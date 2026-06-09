@@ -1,4 +1,4 @@
-import { STATUSES, PRIORITIES, REQUEST_TYPES, EMPLOYERS, STATUS_COLORS, PRIORITY_COLORS } from '../data.js'
+import { STATUSES, PRIORITIES, REQUEST_TYPES, EMPLOYERS, STATUS_COLORS, PRIORITY_COLORS } from './data.js'
 
 function Bar({ label, count, total, color }) {
   const pct = total ? (count / total) * 100 : 0
