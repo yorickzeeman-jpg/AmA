@@ -1,4 +1,4 @@
-import { Icon, Avatar } from '../components.jsx'
+import { Icon, Avatar } from './components.jsx'
 
 const NAV_INTERNAL = [
   { id: 'dashboard',  label: 'Dashboard',        icon: 'dashboard'  },
