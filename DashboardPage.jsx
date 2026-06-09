@@ -1,5 +1,5 @@
 import { KPICard, Badge, SLAIndicator, Icon, CategoryBadge } from './components.jsx'
-import { REQUEST_TYPES } from '../data.js'
+import { REQUEST_TYPES } from './data.js'
 
 export default function DashboardPage({ requests, currentUser, onOpenRequest, onNavigate, onNewRequest }) {
   const isExternal = ['employer_hr', 'employer_payroll'].includes(currentUser.role)
