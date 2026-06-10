@@ -54,8 +54,12 @@ import { inputSt, selectSt, StatusBadge } from '../ui.jsx'
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── HTML TEXT EXTRACTOR ────────────────────────────────────────────────────
-// Uses DOMParser — available in all modern browsers, no dependencies.
-// Removes <style>, <script>, <head> then extracts innerText in DOM order.
+// Source-aware: detects Gmail / Outlook Web / Funeral Portal HTML and
+// extracts only the relevant content — not the surrounding app chrome.
+//
+// Gmail saves its full SPA when you do File → Save. The email body is
+// inside a specific container; everything outside is navigation chrome.
+// We try targeted selectors first, then fall back to full DOM walk.
 function extractHTMLText(htmlString) {
   const log = []
   log.push(`HTML document detected (${(htmlString.length / 1024).toFixed(1)} KB)`)
@@ -64,51 +68,136 @@ function extractHTMLText(htmlString) {
     const parser = new DOMParser()
     const doc    = parser.parseFromString(htmlString, 'text/html')
 
-    // Remove elements that contain no visible content
-    const remove = ['style','script','head','meta','link','noscript','template']
-    remove.forEach(tag => {
-      doc.querySelectorAll(tag).forEach(el => el.remove())
+    // ── Detect source type ───────────────────────────────────────────────
+    const title   = doc.title || ''
+    const bodyTxt = (doc.body?.innerHTML || '').slice(0, 2000)
+
+    const isGmail   = bodyTxt.includes('data-message-id') || bodyTxt.includes('"gmail') ||
+                      title.toLowerCase().includes('gmail') || doc.querySelector('[data-message-id]') !== null
+    const isOutlook = bodyTxt.includes('ReadMsgBody') || bodyTxt.includes('OutlookMessageHeader') ||
+                      title.toLowerCase().includes('outlook')
+    const isPortal  = title.toLowerCase().includes('amcu') || bodyTxt.includes('prem-box') ||
+                      bodyTxt.includes('family-plan') || bodyTxt.includes('application record')
+
+    log.push(`Source: ${isGmail ? 'Gmail' : isOutlook ? 'Outlook Web' : isPortal ? 'Funeral Portal' : 'Generic HTML'}`)
+
+    // ── Remove noise elements first (applies to all sources) ────────────
+    const noiseSelectors = [
+      'style','script','head','meta','link','noscript','template',
+      // Gmail chrome
+      '.aeH','[role="banner"]','[role="navigation"]','[role="complementary"]',
+      '.gb_','#gb','#gbw',                          // Google top bar
+      '.nH > .no',                                  // Gmail left nav
+      '[data-tooltip]','[aria-label="Search mail"]',
+      '.G-Ni', '.bzw', '.bAw',                     // Gmail toolbar buttons
+      // Outlook chrome
+      '.ms-CommandBar','[role="menubar"]','#headerArea',
+    ]
+    noiseSelectors.forEach(sel => {
+      try { doc.querySelectorAll(sel).forEach(el => el.remove()) } catch {}
     })
 
-    // Walk the DOM and collect text in reading order
-    // Use a TreeWalker to visit text nodes in document order
-    const lines    = []
-    const walker   = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT)
+    // ── Strategy 1: targeted body selectors by source ────────────────────
+    let bodyEl = null
+
+    if (isGmail) {
+      // Gmail email body is in one of these containers (varies by Gmail version)
+      const gmailSelectors = [
+        '[data-message-id]',           // modern Gmail
+        '.a3s.aiL',                    // classic compose body
+        '.a3s',                        // email body div
+        '.ii.gt .a3s',                 // threaded message
+        '.ii.gt',                      // thread container
+        '[data-legacy-message-id]',    // legacy
+        '.gs',                         // message body
+        'div[class*="message"]',       // generic message div
+      ]
+      for (const sel of gmailSelectors) {
+        try {
+          const el = doc.querySelector(sel)
+          if (el && el.textContent.trim().length > 50) {
+            bodyEl = el
+            log.push(`Gmail body found via: ${sel}`)
+            break
+          }
+        } catch {}
+      }
+      // If no targeted selector worked, find the largest text-containing div
+      if (!bodyEl) {
+        log.push('Gmail selector miss — using largest content block')
+        bodyEl = findLargestTextBlock(doc)
+      }
+    } else if (isOutlook) {
+      const outlookSelectors = [
+        '.ReadMsgBody','.ExternalClass','[class*="ReadMsg"]',
+        '#divtagdefaultwrapper','#divTagPreviewArea',
+      ]
+      for (const sel of outlookSelectors) {
+        try {
+          const el = doc.querySelector(sel)
+          if (el && el.textContent.trim().length > 50) { bodyEl = el; log.push(`Outlook body: ${sel}`); break }
+        } catch {}
+      }
+    } else if (isPortal) {
+      // Funeral Portal documents: use full body (no chrome to strip)
+      bodyEl = doc.body
+      log.push('Funeral Portal — full body extraction')
+    }
+
+    // ── Strategy 2: full body walk if no targeted element found ──────────
+    const root = bodyEl || doc.body || doc.documentElement
+    log.push(`Extracting from: ${bodyEl ? 'targeted element' : 'full document body'}`)
+
+    // ── Extract text nodes in DOM order ──────────────────────────────────
+    const lines   = []
+    const walker  = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT)
     let   node
 
     while ((node = walker.nextNode())) {
       const text = node.textContent.trim()
       if (text.length === 0) continue
-
-      // Split on internal newlines the template may have encoded
-      const parts = text.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0)
+      // Skip text inside hidden elements
+      const parent = node.parentElement
+      if (parent) {
+        const style = parent.getAttribute('style') || ''
+        if (style.includes('display:none') || style.includes('display: none') ||
+            style.includes('visibility:hidden')) continue
+      }
+      const parts = text.split(/[\n\r]+/).map(p => p.trim()).filter(p => p.length > 0)
       lines.push(...parts)
     }
 
-    // Deduplicate consecutive identical lines (some templates repeat labels)
     const deduped = lines.filter((l, i) => l !== lines[i - 1])
-
-    log.push(`Text nodes extracted: ${lines.length}`)
-    log.push(`After dedup: ${deduped.length} lines`)
+    log.push(`Text nodes: ${lines.length} → after dedup: ${deduped.length} lines`)
 
     return { lines: deduped, log }
+
   } catch (e) {
-    log.push(`HTML parse error: ${e.message}`)
-    // Fallback: regex strip of tags
+    log.push(`HTML parse error: ${e.message} — using regex fallback`)
     const stripped = htmlString
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<[^>]+>/g, '\n')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     const lines = stripped.split('\n').map(l => l.trim()).filter(l => l.length > 1)
-    log.push(`Fallback regex strip: ${lines.length} lines`)
+    log.push(`Regex fallback: ${lines.length} lines`)
     return { lines, log }
   }
+}
+
+// Find the div with the most text content — used as Gmail fallback
+function findLargestTextBlock(doc) {
+  let best = null, bestLen = 0
+  doc.querySelectorAll('div,td,article,section,main').forEach(el => {
+    const len = el.textContent.trim().length
+    // Must be a leaf-ish container (not the whole page), text > 100 chars
+    if (len > bestLen && len < 50000 && el.children.length < 30) {
+      bestLen = len; best = el
+    }
+  })
+  return best
 }
 
 // ── BINARY PDF TEXT EXTRACTOR ─────────────────────────────────────────────
@@ -210,18 +299,24 @@ function extractASCIIRuns(s) {
 // ── MASTER DOCUMENT ROUTER ────────────────────────────────────────────────
 // Detects content type from the raw string and routes to the right extractor.
 function detectAndExtract(rawText) {
-  const head = rawText.slice(0, 1000).trim()
+  const head  = rawText.slice(0, 1000).trim()
+  const lower = head.toLowerCase()
 
-  // HTML document (browser-printed PDF from Funeral Portal)
-  if (head.startsWith('<!DOCTYPE') || head.startsWith('<html') ||
-      head.startsWith('<!doctype') || head.includes('<html') ||
-      head.includes('<head>') || head.includes('<body>')) {
-    return { ...extractHTMLText(rawText), docType: 'html' }
+  // HTML document (Gmail saved page, Outlook Web, or Funeral Portal browser-print)
+  if (lower.startsWith('<!doctype') || lower.startsWith('<html') ||
+      lower.includes('<html') || lower.includes('<head>') || lower.includes('<body>')) {
+    const result = extractHTMLText(rawText)
+    // Refine docType label based on what extractHTMLText detected
+    const srcLine = result.log.find(l => l.startsWith('Source:')) || ''
+    const docType = srcLine.includes('Gmail') ? 'gmail'
+                  : srcLine.includes('Outlook') ? 'outlook'
+                  : srcLine.includes('Funeral Portal') ? 'html'
+                  : 'html'
+    return { ...result, docType }
   }
 
-  // True binary PDF
+  // True binary PDF (%PDF header)
   if (head.startsWith('%PDF')) {
-    // Re-encode back to Uint8Array for binary extractor
     const bytes = new Uint8Array(rawText.length)
     for (let i = 0; i < rawText.length; i++) bytes[i] = rawText.charCodeAt(i) & 0xff
     return { ...extractBinaryPDFText(bytes), docType: 'binary_pdf' }
@@ -392,7 +487,34 @@ function parseLines(lines, fileName, pdfLog, docType) {
     if (dMatch) extracted.submissionDate = { value: dMatch[1], source: 'ISO date', confidence: 80, strategy: 'inline' }
   }
 
-  // ── Post-process ──────────────────────────────────────────────────────────
+  // ── Strategy D: extract from fileName and Gmail subject bracket notation ────
+  // Gmail saves files as "Gmail - [AMCU-20260610-25813] New Policy.pdf"
+  // The AMCU ref is right there in the filename — always extract it.
+  if (!extracted.policyRef && fileName) {
+    const bracketMatch = fileName.match(/\[?(AMCU-\d{8}-\d{4,8})\]?/i)
+    if (bracketMatch) {
+      extracted.policyRef = { value: bracketMatch[1], source: `From filename: ${fileName}`, confidence: 98, strategy: 'inline' }
+    }
+  }
+
+  // Also scan lines for bracket notation "[AMCU-...]" which Gmail puts in subject lines
+  if (!extracted.policyRef) {
+    for (const line of lines) {
+      const bracketMatch = line.match(/\[?(AMCU-\d{8}-\d{4,8})\]?/i)
+      if (bracketMatch) {
+        extracted.policyRef = { value: bracketMatch[1], source: `From line: "${line.slice(0,60)}"`, confidence: 96, strategy: 'inline' }
+        break
+      }
+    }
+  }
+
+  // ── Strategy E: Gmail email header fields ──────────────────────────────────
+  // Gmail printed pages include a header block with From/To/Date/Subject
+  // These appear as plain text lines — extract them for context
+  if (!extracted.submissionDate) {
+    const dateLine = lines.find(l => /^\d{1,2}\s+\w+\s+\d{4}/.test(l) || /^\w+,\s+\d{1,2}\s+\w+\s+\d{4}/.test(l))
+    if (dateLine) extracted.submissionDate = { value: dateLine.slice(0, 30), source: 'Gmail date header', confidence: 75, strategy: 'inline' }
+  }
   // Synthesise memberName from surname + firstName
   if (!extracted.memberName && (extracted.memberSurname || extracted.memberFirstName)) {
     const combined = [extracted.memberFirstName?.value, extracted.memberSurname?.value].filter(Boolean).join(' ')
@@ -455,8 +577,11 @@ function parseLines(lines, fileName, pdfLog, docType) {
   if (extracted.billingFlag?.value === 'Yes') billingRequired = true
 
   // ── Subject / document title ──────────────────────────────────────────────
+  // For Gmail saves, the filename IS the subject: "Gmail - [AMCU-...] New Policy.pdf"
+  const fileSubject = fileName?.replace(/^Gmail\s*-\s*/i, '').replace(/\.pdf$/i, '').trim()
   const subjectLine = lines.find(l => /^subject[:\s]/i.test(l))
   const emailSubject = subjectLine?.replace(/^subject[:\s]+/i, '').trim()
+    || (fileSubject?.includes('AMCU') ? fileSubject : null)
     || extracted.policyRef?.value
     || lines[0]?.slice(0, 80)
     || fileName?.replace(/\.(eml|msg|pdf)$/i, '')
@@ -965,25 +1090,31 @@ function ReviewPhase({ parseResult, uploadedFile, caseTypes, categories, employe
           {tab==='debug' && (
             <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderTop:'none', borderRadius:'0 0 12px 12px', overflow:'hidden' }}>
               {/* Document type + extraction log */}
-              <div style={{ padding:'10px 16px', background:r.docType==='html'?'#f0fdf4':r.docType==='binary_pdf'?'#f0f7ff':'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
+              <div style={{ padding:'10px 16px', background:r.docType==='gmail'?'#fef9c3':r.docType==='outlook'?'#eff6ff':r.docType==='html'?'#f0fdf4':r.docType==='binary_pdf'?'#f0f7ff':'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <span style={{ fontSize:16 }}>{r.docType==='html'?'🌐':r.docType==='binary_pdf'?'📄':'📝'}</span>
+                  <span style={{ fontSize:18 }}>
+                    {r.docType==='gmail'?'📧':r.docType==='outlook'?'📨':r.docType==='html'?'🌐':r.docType==='binary_pdf'?'📄':'📝'}
+                  </span>
                   <div>
                     <div style={{ fontSize:12, fontWeight:700, color:T.text }}>
-                      {r.docType==='html' && 'HTML Document (Funeral Portal browser-print PDF)'}
-                      {r.docType==='binary_pdf' && 'Binary PDF (Tj/TJ operator extraction)'}
-                      {r.docType==='text' && 'Plain Text (EML/MSG/TXT)'}
-                      {r.docType==='unknown' && 'Unknown format'}
+                      {r.docType==='gmail'    && 'Gmail saved page — email body extracted'}
+                      {r.docType==='outlook'  && 'Outlook Web saved page — email body extracted'}
+                      {r.docType==='html'     && 'Funeral Portal HTML document — full body extracted'}
+                      {r.docType==='binary_pdf' && 'Binary PDF — Tj/TJ operator extraction'}
+                      {r.docType==='text'     && 'Plain text (EML/MSG/TXT) — direct parse'}
+                      {r.docType==='unknown'  && 'Unknown document format'}
                     </div>
                     <div style={{ fontSize:11, color:T.gray }}>
-                      {r.docType==='html' && 'DOMParser used — HTML stripped, text extracted in reading order'}
-                      {r.docType==='binary_pdf' && 'Binary PDF scanner used — Tj/TJ operators extracted'}
-                      {r.docType==='text' && 'Direct line split — no HTML stripping required'}
+                      {r.docType==='gmail'    && 'Gmail chrome removed · targeted [data-message-id] / .a3s selectors used'}
+                      {r.docType==='outlook'  && 'Outlook chrome removed · .ReadMsgBody selector used'}
+                      {r.docType==='html'     && 'DOMParser used · style/script removed · text extracted in reading order'}
+                      {r.docType==='binary_pdf' && 'Safe linear scanner · no regex on binary data'}
+                      {r.docType==='text'     && 'No HTML stripping required'}
                     </div>
                   </div>
                 </div>
                 {r.pdfLog?.map((l,i)=>(
-                  <div key={i} style={{ fontSize:11, fontFamily:'monospace', color:T.gray, marginBottom:1 }}>{l}</div>
+                  <div key={i} style={{ fontSize:10, fontFamily:'monospace', color:T.gray, marginBottom:1 }}>{l}</div>
                 ))}
               </div>
               <div style={{ padding:'10px 16px', background:'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
