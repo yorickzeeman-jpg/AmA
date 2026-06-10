@@ -1,191 +1,125 @@
-import { T, slaStatus } from '../data.js'
-import { BarRow, Card, CardHead, KPI } from '../ui.jsx'
+import { T } from './data.js'
+import { Icon, Avatar } from './ui.jsx'
 
-export default function ReportsPage({ cases, caseTypes, categories, employers, users }) {
-  const total     = cases.length
-  const completed = cases.filter(c => c.status==='Completed').length
-  const overdue   = cases.filter(c => slaStatus(c.slaDate,c.status)==='overdue').length
-  const withinSla = cases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) }).length
-  const slaPct    = total ? Math.round((withinSla/total)*100) : 100
+// Workspace-aware navigation — employer users see a simpler set
+const INTERNAL_NAV = [
+  { id:'dashboard',       label:'Dashboard',        icon:'dashboard'  },
+  { id:'cases',           label:'Employer Cases',   icon:'cases'      },
+  { id:'internal_cases',  label:'Internal Cases',   icon:'audit'      },
+  { id:'email_intake',    label:'Case from Email',  icon:'send'       },
+  { id:'billing',         label:'Billing Workbench',icon:'sla'        },
+  { id:'employers',       label:'Employers',        icon:'employers'  },
+  { id:'reports',         label:'Reports',          icon:'reports'    },
+]
+const EMPLOYER_NAV = [
+  { id:'dashboard',  label:'Dashboard',      icon:'dashboard' },
+  { id:'cases',      label:'My Cases',       icon:'cases'     },
+]
+const ADMIN_NAV = [
+  { id:'admin_users',      label:'User Management',    icon:'users'     },
+  { id:'admin_casetypes',  label:'Case Type Config',   icon:'workflow'  },
+  { id:'admin_categories', label:'Categories',         icon:'filter'    },
+  { id:'admin_employers',  label:'Employers',          icon:'employers' },
+  { id:'admin_allocation', label:'Allocation Rules',   icon:'transfer'  },
+]
 
-  // Category summary (grouping only — no business logic)
-  const byCat = categories.map(cat => {
-    const typeIds = caseTypes.filter(ct => ct.categoryId===cat.id).map(ct => ct.id)
-    return { ...cat, count:cases.filter(c => typeIds.includes(c.caseTypeId)).length }
+const ROLE_COLORS = {
+  general_manager:'#e8680a',
+  administrator:  '#1e5fd9',
+  billing_admin:  '#7c3aed',
+  employer_admin: '#0891b2',
+  employer_user:  '#0891b2',
+}
+
+export default function Sidebar({ user, page, onNav, onLogout, open }) {
+  const isEmployer = ['employer_admin','employer_user'].includes(user.role)
+  const isGM       = user.role === 'general_manager'
+  const isBilling  = user.role === 'billing_admin'
+  const canEmailIntake = ['general_manager','administrator'].includes(user.role)
+  const nav        = isEmployer ? EMPLOYER_NAV : INTERNAL_NAV.filter(item => {
+    if (item.id === 'billing' && !isGM && !isBilling) return false
+    if (item.id === 'internal_cases' && isEmployer) return false
+    if (item.id === 'email_intake' && !canEmailIntake) return false
+    return true
   })
 
-  // Case Type detail — the primary reporting unit
-  const byCaseType = caseTypes.map(ct => {
-    const ctCases     = cases.filter(c => c.caseTypeId===ct.id)
-    const ctOpen      = ctCases.filter(c => !['Completed','Closed'].includes(c.status))
-    const ctCompleted = ctCases.filter(c => c.status==='Completed')
-    const ctOverdue   = ctCases.filter(c => slaStatus(c.slaDate,c.status)==='overdue')
-    const ctWithinSla = ctCases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) })
-    const cat         = categories.find(c => c.id===ct.categoryId)
-    return {
-      ...ct, cat,
-      total:     ctCases.length,
-      open:      ctOpen.length,
-      completed: ctCompleted.length,
-      overdue:   ctOverdue.length,
-      slaPct:    ctCases.length ? Math.round((ctWithinSla.length/ctCases.length)*100) : 100,
-    }
-  }).filter(ct => ct.total > 0).sort((a,b) => b.total-a.total)
-
-  const byEmployer = employers.map(emp => ({
-    ...emp,
-    total:     cases.filter(c => c.employerId===emp.id).length,
-    open:      cases.filter(c => c.employerId===emp.id && !['Completed','Closed'].includes(c.status)).length,
-    completed: cases.filter(c => c.employerId===emp.id && c.status==='Completed').length,
-  })).sort((a,b) => b.total-a.total)
-
-  const consultants  = users.filter(u => ['consultant','claims_admin','service_admin'].includes(u.role))
-  const byConsultant = consultants.map(u => ({
-    ...u,
-    allocated: cases.filter(c => c.assignedTo===u.id).length,
-    completed: cases.filter(c => c.assignedTo===u.id && c.status==='Completed').length,
-    open:      cases.filter(c => c.assignedTo===u.id && !['Completed','Closed'].includes(c.status)).length,
-    escalated: cases.filter(c => c.assignedTo===u.id && c.escalated).length,
-  }))
-
-  const maxCat = Math.max(...byCat.map(c => c.count), 1)
-  const maxEmp = Math.max(...byEmployer.map(e => e.total), 1)
-
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:20, animation:'fadeIn .3s ease' }}>
-      <h1 style={{ fontSize:20, fontWeight:800, color:T.text, margin:0 }}>Operational Reports</h1>
-
-      {/* Summary KPIs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:14 }}>
-        <KPI label="Total Cases"    value={total}        icon="cases"   color={T.blue}   />
-        <KPI label="Completed"      value={completed}    icon="check"   color="#059669"  />
-        <KPI label="Overdue"        value={overdue}      icon="warning" color={T.red}    />
-        <KPI label="SLA Compliance" value={`${slaPct}%`} icon="sla"     color={slaPct>=90?'#059669':slaPct>=70?T.amber:T.red} />
+    <div style={{
+      width:open?228:52, background:'#07122a',
+      transition:'width .2s ease', display:'flex', flexDirection:'column',
+      overflow:'hidden', flexShrink:0,
+      borderRight:'1px solid rgba(255,255,255,0.06)',
+    }}>
+      {/* Logo */}
+      <div style={{ padding:'16px 12px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#e8680a,#c95500)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <span style={{ fontWeight:900, fontSize:14, color:'#fff', fontFamily:'sans-serif' }}>A</span>
+        </div>
+        {open && (
+          <div>
+            <div style={{ color:'#fff', fontWeight:800, fontSize:13, letterSpacing:'-0.3px', lineHeight:1.1 }}>AEB Portal</div>
+            <div style={{ color:'rgba(255,255,255,0.35)', fontSize:9, fontWeight:600, letterSpacing:'1.5px', textTransform:'uppercase' }}>Employer Services</div>
+          </div>
+        )}
       </div>
 
-      {/* ── CASE TYPE PERFORMANCE — primary reporting unit ── */}
-      <Card style={{ gridColumn:'1/-1' }}>
-        <CardHead title="SLA Performance by Case Type" />
-        <div style={{ padding:'4px 0 0' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(700px,1fr))' }}>
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:680 }}>
-                <thead>
-                  <tr style={{ background:'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
-                    {['Case Type','Category','SLA Target','Total','Open','Completed','Overdue','SLA %'].map(h => (
-                      <th key={h} style={{ padding:'9px 14px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {byCaseType.map(ct => (
-                    <tr key={ct.id} style={{ borderBottom:`1px solid #f3f4f6` }}>
-                      <td style={{ padding:'11px 14px', fontSize:13, fontWeight:700, color:T.text }}>{ct.name}</td>
-                      <td style={{ padding:'11px 14px' }}>
-                        {ct.cat && <span style={{ fontSize:11, padding:'2px 8px', background:ct.cat.color+'18', color:ct.cat.color, borderRadius:4, fontWeight:700 }}>{ct.cat.name}</span>}
-                      </td>
-                      <td style={{ padding:'11px 14px', fontSize:12, color:T.gray }}>{ct.slaLabel}</td>
-                      <td style={{ padding:'11px 14px', fontSize:13, fontWeight:600 }}>{ct.total}</td>
-                      <td style={{ padding:'11px 14px', fontSize:13, color:T.amber, fontWeight:600 }}>{ct.open}</td>
-                      <td style={{ padding:'11px 14px', fontSize:13, color:'#059669', fontWeight:600 }}>{ct.completed}</td>
-                      <td style={{ padding:'11px 14px', fontSize:13, color:ct.overdue>0?T.red:T.gray, fontWeight:ct.overdue>0?700:400 }}>{ct.overdue}</td>
-                      <td style={{ padding:'11px 14px' }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                          <div style={{ flex:1, height:6, background:'#f3f4f6', borderRadius:3, minWidth:60 }}>
-                            <div style={{ height:'100%', width:`${ct.slaPct}%`, background:ct.slaPct>=90?'#059669':ct.slaPct>=70?T.amber:T.red, borderRadius:3, transition:'width .4s' }} />
-                          </div>
-                          <span style={{ fontSize:12, fontWeight:700, color:ct.slaPct>=90?'#059669':ct.slaPct>=70?T.amber:T.red, minWidth:36, textAlign:'right' }}>{ct.slaPct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {byCaseType.length===0 && (
-                    <tr><td colSpan={8} style={{ padding:32, textAlign:'center', color:T.gray, fontSize:13 }}>No case data yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
+      {/* Main nav */}
+      <nav style={{ flex:1, padding:'8px 6px', overflowY:'auto' }}>
+        {nav.map(item => (
+          <NavBtn key={item.id} item={item} active={page===item.id} onClick={() => onNav(item.id)} open={open} />
+        ))}
+
+        {/* Admin section — GM only */}
+        {isGM && (
+          <>
+            {open && <div style={{ fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.3)', letterSpacing:'1.5px', padding:'14px 8px 5px', textTransform:'uppercase' }}>Administration</div>}
+            {!open && <div style={{ height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0' }} />}
+            {ADMIN_NAV.map(item => (
+              <NavBtn key={item.id} item={item} active={page===item.id} onClick={() => onNav(item.id)} open={open} accent />
+            ))}
+          </>
+        )}
+      </nav>
+
+      {/* User footer */}
+      <div style={{ padding:'8px 6px', borderTop:'1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:9, padding:'7px 8px', marginBottom:2 }}>
+          <div style={{ width:28, height:28, borderRadius:'50%', background:ROLE_COLORS[user.role]||T.orange, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', flexShrink:0 }}>
+            {user.avatar}
+          </div>
+          {open && (
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ color:'#fff', fontSize:11, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</div>
+              <div style={{ color:'rgba(255,255,255,0.35)', fontSize:9, textTransform:'capitalize' }}>{user.role.replace(/_/g,' ')}</div>
             </div>
-          </div>
+          )}
         </div>
-      </Card>
-
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16 }}>
-        {/* By Category (grouping only) */}
-        <Card>
-          <CardHead title="Volume by Category" />
-          <div style={{ padding:'14px 18px' }}>
-            {byCat.filter(c=>c.count>0).map(cat => <BarRow key={cat.id} label={cat.name} value={cat.count} max={maxCat} color={cat.color} />)}
-            {byCat.every(c=>c.count===0) && <div style={{ fontSize:13, color:T.gray, textAlign:'center', padding:16 }}>No data yet.</div>}
-          </div>
-        </Card>
-
-        {/* By Employer */}
-        <Card>
-          <CardHead title="Volume by Employer" />
-          <div style={{ padding:'14px 18px' }}>
-            {byEmployer.map(emp => <BarRow key={emp.id} label={emp.name} value={emp.total} max={maxEmp} color={T.blue} />)}
-          </div>
-        </Card>
-
-        {/* Consultant Productivity */}
-        <Card>
-          <CardHead title="Consultant Productivity" />
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:340 }}>
-              <thead>
-                <tr style={{ background:'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
-                  {['Consultant','Allocated','Open','Completed','Escalated'].map(h => (
-                    <th key={h} style={{ padding:'8px 12px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.4px' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byConsultant.map(u => (
-                  <tr key={u.id} style={{ borderBottom:`1px solid #f3f4f6` }}>
-                    <td style={{ padding:'10px 12px', fontSize:13, fontWeight:600, color:T.text }}>{u.name}</td>
-                    <td style={{ padding:'10px 12px', fontSize:13 }}>{u.allocated}</td>
-                    <td style={{ padding:'10px 12px', fontSize:13, color:T.amber, fontWeight:600 }}>{u.open}</td>
-                    <td style={{ padding:'10px 12px', fontSize:13, color:'#059669', fontWeight:600 }}>{u.completed}</td>
-                    <td style={{ padding:'10px 12px', fontSize:13, color:u.escalated>0?T.red:T.gray, fontWeight:u.escalated>0?700:400 }}>{u.escalated}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* Employer Service Summary */}
-        <Card style={{ gridColumn:'1/-1' }}>
-          <CardHead title="Employer Service Summary" />
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
-              <thead>
-                <tr style={{ background:'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
-                  {['Employer','Industry','Members','Total','Open','Completed','Consultant'].map(h => (
-                    <th key={h} style={{ padding:'8px 14px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.4px' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byEmployer.map(emp => {
-                  const con = users.find(u => u.id===emp.consultant)
-                  return (
-                    <tr key={emp.id} style={{ borderBottom:`1px solid #f3f4f6` }}>
-                      <td style={{ padding:'10px 14px', fontSize:13, fontWeight:600, color:T.text }}>{emp.name}</td>
-                      <td style={{ padding:'10px 14px', fontSize:12, color:T.gray }}>{emp.industry}</td>
-                      <td style={{ padding:'10px 14px', fontSize:12 }}>{emp.members.toLocaleString()}</td>
-                      <td style={{ padding:'10px 14px', fontSize:13, fontWeight:600 }}>{emp.total}</td>
-                      <td style={{ padding:'10px 14px', fontSize:13, color:T.amber, fontWeight:600 }}>{emp.open}</td>
-                      <td style={{ padding:'10px 14px', fontSize:13, color:'#059669', fontWeight:600 }}>{emp.completed}</td>
-                      <td style={{ padding:'10px 14px', fontSize:12 }}>{con?.name||'—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <button onClick={onLogout} style={{ display:'flex', alignItems:'center', gap:9, width:'100%', padding:'7px 8px', borderRadius:7, background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', fontFamily:'inherit' }}>
+          <Icon name="logout" size={14} color="rgba(255,255,255,0.35)" />
+          {open && <span style={{ fontSize:11 }}>Sign out</span>}
+        </button>
       </div>
     </div>
+  )
+}
+
+function NavBtn({ item, active, onClick, open, accent }) {
+  const activeColor = accent ? T.orange : '#fff'
+  const iconColor   = active ? (accent ? T.orange : '#fff') : 'rgba(255,255,255,0.4)'
+  return (
+    <button onClick={onClick} style={{
+      display:'flex', alignItems:'center', gap:10, width:'100%',
+      padding:'9px 8px', borderRadius:7,
+      background:active ? (accent ? 'rgba(232,104,10,0.12)' : 'rgba(255,255,255,0.1)') : 'none',
+      border:'none', color:active ? activeColor : 'rgba(255,255,255,0.45)',
+      cursor:'pointer', marginBottom:1, textAlign:'left',
+      whiteSpace:'nowrap', overflow:'hidden', transition:'all .12s',
+      fontFamily:'inherit',
+    }}
+    onMouseEnter={e => !active && (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+    onMouseLeave={e => !active && (e.currentTarget.style.background = 'none')}>
+      <Icon name={item.icon} size={15} color={iconColor} />
+      {open && <span style={{ fontSize:12, fontWeight:active?700:400 }}>{item.label}</span>}
+    </button>
   )
 }

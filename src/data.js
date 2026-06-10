@@ -1,317 +1,574 @@
-import { useState } from 'react'
-import { T, CASE_STATUSES, PRIORITIES, genRef, calcSlaDate } from '../data.js'
-import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn } from '../ui.jsx'
-
-const STAGE_CLR = { done:'#059669', active:'#1e5fd9', pending:T.gray }
-
-export default function CaseDetail({ c, caseType, category, employer, users, currentUser, onClose, onUpdate, onAddBillingTask }) {
-  const [tab, setTab] = useState('Overview')
-  const [note, setNote] = useState('')
-  const isInternal = !['employer_admin','employer_user'].includes(currentUser.role)
-  const isAdmin    = currentUser.role === 'administrator'
-  const isGM       = currentUser.role === 'general_manager'
-  const canEdit    = isInternal
-
-  const assignedUser = users.find(u=>u.id===c.assignedTo)
-  const stages = caseType?.stages || []
-  const currentStageIdx = c.currentStage
-
-  function advanceStage() {
-    if (currentStageIdx >= stages.length-1) return
-    const nextIdx = currentStageIdx+1
-    const next = stages[nextIdx]
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:`Stage advanced to "${next.name}"`, type:'stage' }]
-    onUpdate({ ...c, currentStage:nextIdx, stageHistory:[...c.stageHistory, next.id], status:'In Progress', audit })
-  }
-
-  function sendToBilling() {
-    // "Complete & Send to Billing" action
-    const btRef = genRef('BT')
-    const btId  = 'bt'+Date.now()
-    const billingTask = {
-      id: btId, ref: btRef,
-      linkedCaseId: c.id, linkedCaseRef: c.ref,
-      employerId: c.employerId, memberName: c.memberName,
-      transactionType: caseType?.name || 'Unknown',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      assignedTo: '', status: 'Pending Billing',
-      priority: c.priority, createdBy: currentUser.id,
-      created: new Date().toISOString().split('T')[0],
-      notes: [],
-      audit: [
-        { time:new Date().toISOString(), user:currentUser.id, action:`Billing Task ${btRef} created from ${c.ref}`, type:'create' },
-      ],
-    }
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:`Complete & Send to Billing — Billing Task ${btRef} created`, type:'billing' }]
-    onUpdate({ ...c, status:'Sent to Billing', billingTaskId:btId, audit })
-    onAddBillingTask && onAddBillingTask(billingTask)
-  }
-
-  function completeCase() {
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:'Case marked Completed', type:'complete' }]
-    onUpdate({ ...c, status:'Completed', audit })
-  }
-
-  function updateStatus(s) {
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:`Status changed to "${s}"`, type:'status' }]
-    onUpdate({ ...c, status:s, audit })
-  }
-
-  function reassign(userId) {
-    const u = users.find(x=>x.id===userId)
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:`Reassigned to ${u?.name||userId}`, type:'assign' }]
-    const history = [...c.ownerHistory, { user:userId, from:new Date().toISOString().split('T')[0] }]
-    onUpdate({ ...c, assignedTo:userId, ownerHistory:history, audit })
-  }
-
-  function addNote() {
-    if (!note.trim()) return
-    const n = { user:currentUser.id, date:new Date().toISOString().split('T')[0], text:note.trim() }
-    const audit = [...c.audit, { time:new Date().toISOString(), user:currentUser.id, action:'Note added', type:'note' }]
-    onUpdate({ ...c, notes:[...c.notes,n], audit })
-    setNote('')
-  }
-
-  const auditColor = { create:T.blue, assign:T.purple, stage:T.green, billing:T.purple, escalate:T.red, complete:T.green, status:T.amber, note:T.amber }
-
-  const isBillingTrigger = caseType?.isBillingTrigger
-  const atFinalStage = currentStageIdx >= stages.length-1
-  const alreadySentToBilling = !!c.billingTaskId
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1000, display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}
-      onClick={e=>{ if(e.target===e.currentTarget) onClose() }}>
-      <div style={{ width:'min(740px,100vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-8px 0 40px rgba(0,0,0,0.15)', animation:'slideIn .2s ease' }}>
-
-        {/* Header */}
-        <div style={{ padding:'18px 22px', borderBottom:`1px solid ${T.border}`, background:'#fafaf9' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-            <div style={{ flex:1, marginRight:12 }}>
-              <div style={{ display:'flex', gap:7, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
-                <span style={{ fontFamily:'monospace', fontSize:12, color:T.gray, fontWeight:700 }}>{c.ref}</span>
-                <StatusBadge status={c.status}/>
-                <PriorityBadge priority={c.priority}/>
-                {c.workspace==='internal' && <span style={{ fontSize:10, fontWeight:700, color:T.gray, background:'#f3f4f6', padding:'2px 8px', borderRadius:20 }}>INTERNAL</span>}
-                {c.escalated && <span style={{ fontSize:10, fontWeight:700, color:T.red, background:'#fff1f2', padding:'2px 8px', borderRadius:20 }}>⚠ ESCALATED</span>}
-                {c.billingTaskId && <span style={{ fontSize:10, fontWeight:700, color:T.purple, background:'#f5f3ff', padding:'2px 8px', borderRadius:20 }}>BILLING: {c.billingTaskId.toUpperCase()}</span>}
-              </div>
-              <div style={{ fontSize:17, fontWeight:700, color:T.text, marginBottom:4 }}>{caseType?.name}</div>
-              {category && <span style={{ fontSize:11, padding:'2px 8px', background:category.color+'18', color:category.color, borderRadius:4, fontWeight:700, marginBottom:6, display:'inline-block' }}>{category.name}</span>}
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginTop:4 }}>
-                <span style={{ fontSize:12, color:T.gray }}>🏢 {employer?.name}</span>
-                {c.memberName && <span style={{ fontSize:12, color:T.gray }}>👤 {c.memberName}</span>}
-                <span style={{ fontSize:12, color:T.gray }}>📅 {c.created}</span>
-                <SLAChip slaDate={c.slaDate} status={c.status}/>
-              </div>
-            </div>
-            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:T.gray, padding:4 }}><Icon name="close" size={20}/></button>
-          </div>
-        </div>
-
-        <Tabs tabs={['Overview','Workflow','Documents','Notes','Audit']} active={tab} onChange={setTab}/>
-
-        <div style={{ flex:1, overflowY:'auto', padding:22 }}>
-
-          {/* OVERVIEW */}
-          {tab==='Overview' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
-                {[
-                  ['SLA Target',     caseType?.slaLabel],
-                  ['Assigned To',    assignedUser?.name||'Unassigned'],
-                  ['SLA Due',        c.slaDate],
-                  ['Created',        c.created],
-                  ['Responsible',    caseType?.responsibleTeam],
-                  ['Member ID',      c.memberId||'—'],
-                ].map(([k,v])=>(
-                  <div key={k}>
-                    <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>{k}</div>
-                    <div style={{ fontSize:13, fontWeight:500, color:T.text }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>Description</div>
-                <p style={{ fontSize:13, color:'#374151', lineHeight:1.7, margin:0 }}>{c.description}</p>
-              </div>
-
-              {/* Required docs checklist */}
-              {caseType?.requiredDocs?.length > 0 && (
-                <div>
-                  <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:8 }}>Required Documents</div>
-                  {caseType.requiredDocs.map(doc=>{
-                    const uploaded = c.documents.some(d=>d.name.toLowerCase().includes(doc.toLowerCase().split(' ')[0].toLowerCase()))
-                    return (
-                      <div key={doc} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                        <Icon name={uploaded?'check':'warning'} size={14} color={uploaded?T.green:'#d1d5db'}/>
-                        <span style={{ fontSize:13, color:uploaded?T.text:T.gray }}>{doc}</span>
-                        {!uploaded && <span style={{ fontSize:10, color:T.amber, fontWeight:700 }}>OUTSTANDING</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Actions — internal users only */}
-              {canEdit && (
-                <div style={{ background:'#f0f7ff', borderRadius:10, padding:16, border:'1px solid #bfdbfe' }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:T.blue, marginBottom:12 }}>Actions</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
-                    {c.status!=='Completed' && c.status!=='Closed' && c.status!=='Sent to Billing' && currentStageIdx < stages.length-1 && (
-                      <Btn onClick={advanceStage} small><Icon name="chevron_r" size={13} color="#fff"/> Advance Stage</Btn>
-                    )}
-                    {/* "Complete & Send to Billing" for billing-trigger case types */}
-                    {isBillingTrigger && !alreadySentToBilling && atFinalStage && (
-                      <Btn onClick={sendToBilling} small style={{ background:T.purple }}>
-                        <Icon name="sla" size={13} color="#fff"/> Complete & Send to Billing
-                      </Btn>
-                    )}
-                    {/* Standard complete for non-billing cases */}
-                    {!isBillingTrigger && atFinalStage && c.status!=='Completed' && (
-                      <Btn onClick={completeCase} small>
-                        <Icon name="check" size={13} color="#fff"/> Mark Complete
-                      </Btn>
-                    )}
-                    {alreadySentToBilling && (
-                      <span style={{ fontSize:12, color:T.purple, fontWeight:600, background:'#f5f3ff', padding:'6px 12px', borderRadius:7 }}>
-                        ✓ Sent to Billing · Task {c.billingTaskId}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ marginBottom:12 }}>
-                    <div style={{ fontSize:11, fontWeight:600, color:'#374151', marginBottom:6 }}>Update Status</div>
-                    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                      {CASE_STATUSES.map(s=>(
-                        <button key={s} onClick={()=>updateStatus(s)} style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${c.status===s?T.blue:T.border}`, background:c.status===s?T.blue:'#fff', color:c.status===s?'#fff':'#374151', fontSize:11, fontWeight:600, cursor:'pointer' }}>{s}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:600, color:'#374151', marginBottom:6 }}>Assign To</div>
-                    <select value={c.assignedTo||''} onChange={e=>reassign(e.target.value)} style={{ padding:'6px 10px', border:`1px solid ${T.border}`, borderRadius:7, fontSize:12 }}>
-                      <option value="">Unassigned</option>
-                      {users.filter(u=>['administrator','billing_admin','general_manager'].includes(u.role) && u.status==='active').map(u=>(
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* WORKFLOW */}
-          {tab==='Workflow' && (
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:16 }}>
-                Workflow — {caseType?.name} · Stage {Math.min(currentStageIdx+1, stages.length)} of {stages.length}
-              </div>
-              {stages.map((stage,idx)=>{
-                const done   = idx < currentStageIdx
-                const active = idx === currentStageIdx
-                const clr    = done ? STAGE_CLR.done : active ? STAGE_CLR.active : STAGE_CLR.pending
-                return (
-                  <div key={stage.id} style={{ display:'flex', gap:14, marginBottom:20, position:'relative' }}>
-                    {idx < stages.length-1 && <div style={{ position:'absolute', left:15, top:32, width:2, height:'calc(100% + 4px)', background:done?'#d1fae5':'#e5e7eb' }}/>}
-                    <div style={{ width:32, height:32, borderRadius:'50%', border:`2px solid ${clr}`, background:done?'#d1fae5':active?'#eff6ff':'#f9fafb', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      {done ? <Icon name="check" size={14} color={T.green}/> : <span style={{ fontSize:11, fontWeight:700, color:clr }}>{idx+1}</span>}
-                    </div>
-                    <div style={{ flex:1, paddingTop:4 }}>
-                      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                        <span style={{ fontSize:14, fontWeight:active?700:500, color:idx>currentStageIdx?T.gray:T.text }}>{stage.name}</span>
-                        {active && <span style={{ fontSize:10, fontWeight:700, color:T.blue, background:'#eff6ff', padding:'2px 8px', borderRadius:20 }}>CURRENT</span>}
-                        {done && <span style={{ fontSize:10, fontWeight:700, color:T.green, background:'#d1fae5', padding:'2px 8px', borderRadius:20 }}>DONE</span>}
-                      </div>
-                      <div style={{ fontSize:11, color:T.gray, marginTop:2 }}>
-                        Owner: <span style={{ fontWeight:600 }}>{stage.owner?.replace(/_/g,' ')}</span>
-                        {stage.notify && <> · <span style={{ color:T.amber }}>Notify on completion</span></>}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {/* Billing stage note */}
-              {caseType?.isBillingTrigger && (
-                <div style={{ background:'#f5f3ff', borderRadius:9, padding:'12px 14px', border:'1px solid #ddd6fe', marginTop:8 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:T.purple, marginBottom:3 }}>Billing Workflow</div>
-                  <div style={{ fontSize:12, color:'#6d28d9' }}>After the final stage, use "Complete & Send to Billing" to create a Billing Task and notify the billing team.</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* DOCUMENTS */}
-          {tab==='Documents' && (
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:14 }}>Documents ({c.documents.length})</div>
-              {c.documents.map((doc,i)=>(
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background:'#f9fafb', borderRadius:8, marginBottom:8, border:`1px solid ${T.border}` }}>
-                  <Icon name="attach" size={18} color={T.gray}/>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{doc.name}</div>
-                    <div style={{ fontSize:11, color:T.gray }}>{doc.size} · {doc.date}</div>
-                  </div>
-                  <button style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, padding:'4px 10px', cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
-                    <Icon name="download" size={12}/> Download
-                  </button>
-                </div>
-              ))}
-              {c.documents.length===0 && <div style={{ textAlign:'center', color:T.gray, padding:32 }}>No documents uploaded.</div>}
-              <div style={{ marginTop:14, padding:18, border:'2px dashed #d1d5db', borderRadius:8, textAlign:'center', color:T.gray, cursor:'pointer', fontSize:12 }}>
-                <Icon name="attach" size={18} color={T.border}/>
-                <div style={{ marginTop:5 }}>Click to upload documents (PDF, DOCX, XLSX, JPG, PNG)</div>
-              </div>
-            </div>
-          )}
-
-          {/* NOTES */}
-          {tab==='Notes' && (
-            <div>
-              {c.notes.map((n,i)=>{
-                const u = users.find(x=>x.id===n.user)
-                return (
-                  <div key={i} style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, padding:13, marginBottom:10 }}>
-                    <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:5 }}>
-                      <div style={{ width:24, height:24, borderRadius:'50%', background:T.amber, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700 }}>{u?.avatar||'?'}</div>
-                      <span style={{ fontSize:12, fontWeight:700, color:'#92400e' }}>{u?.name||'Unknown'}</span>
-                      <span style={{ fontSize:11, color:T.gray }}>{n.date}</span>
-                    </div>
-                    <p style={{ margin:0, fontSize:13, color:'#374151' }}>{n.text}</p>
-                  </div>
-                )
-              })}
-              {c.notes.length===0 && <div style={{ textAlign:'center', color:T.gray, marginBottom:16 }}>No notes yet.</div>}
-              <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Add a note..." style={{ width:'100%', minHeight:72, padding:11, border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, resize:'vertical', boxSizing:'border-box', fontFamily:'inherit' }}/>
-              <button onClick={addNote} style={{ marginTop:7, padding:'7px 14px', background:T.navy, color:'#fff', border:'none', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-                <Icon name="send" size={13} color="#fff"/> Add Note
-              </button>
-            </div>
-          )}
-
-          {/* AUDIT */}
-          {tab==='Audit' && (
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:12 }}>Audit Trail — {c.ref}</div>
-              {[...c.audit].reverse().map((ev,i)=>{
-                const u = users.find(x=>x.id===ev.user)
-                const clr = auditColor[ev.type]||T.gray
-                return (
-                  <div key={i} style={{ display:'flex', gap:12, padding:'9px 0', borderBottom:'1px solid #f3f4f6' }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:clr, marginTop:5, flexShrink:0 }}/>
-                    <div style={{ flex:1 }}>
-                      <span style={{ fontSize:13, color:T.text }}>{ev.action}</span>
-                      <div style={{ fontSize:11, color:T.gray, marginTop:1 }}>{u?.name||ev.user} · {new Date(ev.time).toLocaleString('en-ZA',{dateStyle:'short',timeStyle:'short'})}</div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+// ─── DESIGN TOKENS — Discovery Navy / AEB Orange ────────────────────────────
+export const T = {
+  navy:    '#07122a',
+  navy2:   '#0c1d3e',
+  navy3:   '#0f2347',
+  navy4:   '#162d54',
+  orange:  '#e8680a',
+  orange2: '#f07a20',
+  orangeL: '#fff3e8',
+  blue:    '#1e5fd9',
+  blueL:   '#e8f0fe',
+  red:     '#dc2626',
+  redL:    '#fef2f2',
+  amber:   '#d97706',
+  amberL:  '#fffbeb',
+  green:   '#059669',
+  greenL:  '#f0fdf4',
+  purple:  '#7c3aed',
+  purpleL: '#f5f3ff',
+  teal:    '#0891b2',
+  tealL:   '#ecfeff',
+  gray:    '#6b7280',
+  grayL:   '#f9fafb',
+  border:  '#e5e7eb',
+  white:   '#ffffff',
+  text:    '#111827',
+  textSub: '#6b7280',
+  // Sidebar
+  sidebarBg:    '#07122a',
+  sidebarBg2:   '#0c1d3e',
 }
+
+// ─── ROLES ────────────────────────────────────────────────────────────────────
+export const ROLES = [
+  { id: 'general_manager',  label: 'General Manager',      color: T.orange  },
+  { id: 'administrator',    label: 'Administrator',         color: T.blue    },
+  { id: 'billing_admin',    label: 'Billing Administrator', color: T.purple  },
+  { id: 'employer_admin',   label: 'Employer Admin',        color: T.teal    },
+  { id: 'employer_user',    label: 'Employer User',         color: T.teal    },
+]
+
+export const ROLE_PERMISSIONS = {
+  general_manager: ['all'],
+  administrator:   ['cases:read','cases:write','cases:assign','internal:read','internal:write','reports:read','employers:read'],
+  billing_admin:   ['cases:read','billing:read','billing:write'],
+  employer_admin:  ['cases:read:own','cases:create'],
+  employer_user:   ['cases:read:own','cases:create'],
+}
+
+// ─── NAMED AEB STAFF ──────────────────────────────────────────────────────────
+export const INITIAL_USERS = [
+  { id:'u1', name:'Leandre van der Merwe', email:'leandre@amadwala.co.za',  role:'general_manager', status:'active', employer:null, avatar:'LV', joined:'2022-01-01',
+    allocation:{ directTypes:['ct_underwriting'], pool:null, excludeTypes:[] } },
+  { id:'u2', name:'Nokulunga Nyundu',      email:'nokulunga@amadwala.co.za', role:'administrator',   status:'active', employer:null, avatar:'NN', joined:'2022-03-01',
+    allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting'] } },
+  { id:'u3', name:'Tevin Nxumalo',         email:'tevin@amadwala.co.za',     role:'administrator',   status:'active', employer:null, avatar:'TN', joined:'2022-06-01',
+    allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting','ct_amcu_funeral'] } },
+  { id:'u4', name:'Sesi Phiri',            email:'sesi@amadwala.co.za',      role:'administrator',   status:'active', employer:null, avatar:'SP', joined:'2023-01-01',
+    allocation:{ directTypes:['ct_amcu_funeral','ct_benefit_statement','ct_beneficiary'], pool:null, excludeTypes:[] } },
+  { id:'u5', name:'Daleen Taute',          email:'daleen@amadwala.co.za',    role:'billing_admin',   status:'active', employer:null, avatar:'DT', joined:'2022-01-01',
+    allocation:{ directTypes:['ct_extended_funeral'], pool:'billing', excludeTypes:[] } },
+  { id:'u6', name:'Mahlatse Manyathi',     email:'mahlatse@amadwala.co.za',  role:'administrator',   status:'active', employer:null, avatar:'MM', joined:'2023-04-01',
+    allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting'] } },
+  { id:'u7', name:'Ithasia',               email:'ithasia@amadwala.co.za',   role:'billing_admin',   status:'active', employer:null, avatar:'IT', joined:'2023-06-01',
+    allocation:{ directTypes:[], pool:'billing', excludeTypes:[] } },
+  // Employer contacts
+  { id:'u10', name:'Sandra Botha',     email:'sandra@steelworks.co.za',   role:'employer_admin', status:'active', employer:'e1', avatar:'SB', joined:'2024-01-10', allocation:null },
+  { id:'u11', name:'Kevin Mokoena',    email:'kevin@minetrust.co.za',     role:'employer_user',  status:'active', employer:'e2', avatar:'KM', joined:'2024-02-15', allocation:null },
+  { id:'u12', name:'Pieter Swart',     email:'pieter@buildright.co.za',   role:'employer_admin', status:'active', employer:'e4', avatar:'PS', joined:'2024-03-01', allocation:null },
+]
+
+// ─── ALLOCATION POOLS ─────────────────────────────────────────────────────────
+export const ALLOCATION_POOLS = {
+  general: {
+    name: 'General Administration Pool',
+    members: ['u2','u3','u6'],   // Nokulunga, Tevin, Mahlatse
+    strategy: 'round_robin',
+    currentIndex: 0,
+  },
+  billing: {
+    name: 'Billing Pool',
+    members: ['u5','u7'],        // Daleen, Ithasia
+    strategy: 'round_robin',
+    currentIndex: 0,
+  },
+}
+
+// ─── EMPLOYERS ────────────────────────────────────────────────────────────────
+export const INITIAL_EMPLOYERS = [
+  { id:'e1', name:'Steelworks SA',         number:'EMP-001', industry:'Mining & Steel',  status:'active', members:4200,  contact:'Sandra Botha',       phone:'011 555 0100', email:'hr@steelworks.co.za',  portal:true  },
+  { id:'e2', name:'MineTrust Group',        number:'EMP-002', industry:'Mining',           status:'active', members:12500, contact:'Kevin Mokoena',       phone:'011 555 0200', email:'hr@minetrust.co.za',    portal:true  },
+  { id:'e3', name:'PetroLogix',             number:'EMP-003', industry:'Petroleum',         status:'active', members:3100,  contact:'Nompumelelo Sithole', phone:'011 555 0300', email:'hr@petrologix.co.za',   portal:false },
+  { id:'e4', name:'BuildRight Holdings',    number:'EMP-004', industry:'Construction',      status:'active', members:8700,  contact:'Pieter Swart',        phone:'011 555 0400', email:'hr@buildright.co.za',   portal:true  },
+  { id:'e5', name:'TransAfrica Logistics',  number:'EMP-005', industry:'Transport',         status:'review', members:5600,  contact:'Zanele Khumalo',      phone:'011 555 0500', email:'hr@transafrica.co.za',  portal:false },
+  { id:'e6', name:'AMCU',                   number:'EMP-006', industry:'Trade Union',       status:'active', members:71000, contact:'HR Department',       phone:'011 555 0600', email:'hr@amcu.co.za',         portal:true  },
+]
+
+// ─── CATEGORIES (grouping/reporting only) ────────────────────────────────────
+export const INITIAL_CATEGORIES = [
+  { id:'cat1', name:'Member Administration', color:'#1e5fd9',  description:'New employee, exit, membership amendments.' },
+  { id:'cat2', name:'Claims',                color:'#dc2626',  description:'Funeral, death and disability claims.' },
+  { id:'cat3', name:'Beneficiary & Statements', color:'#7c3aed', description:'Beneficiary nominations and benefit statements.' },
+  { id:'cat4', name:'Billing & Payroll',     color:'#d97706',  description:'Billing queries, payroll reconciliation and administration.' },
+  { id:'cat5', name:'Employer Maintenance',  color:'#0891b2',  description:'Employer information changes and portal administration.' },
+  { id:'cat6', name:'Queries',               color:'#059669',  description:'General queries and information requests.' },
+  { id:'cat7', name:'Internal',              color:'#374151',  description:'Internal AEB workflow cases — not visible to employers.' },
+]
+
+// ─── EMPLOYER-VISIBLE CASE TYPES ─────────────────────────────────────────────
+// isBillingTrigger: true = "Complete & Send to Billing" instead of standard close
+// isInternal: true = not visible to employers (Medical Underwriting etc.)
+// directAssignTo: userId for direct assignment; null = pool allocation
+export const INITIAL_CASE_TYPES = [
+  // ── Member Administration ──────────────────────────────────────────────────
+  {
+    id:'ct_new_employee', categoryId:'cat1', name:'New Employee',
+    slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
+    escalationDays:1, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:true, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:['ID Copy','Employment Contract','Enrolment Form','Beneficiary Form'],
+    stages:[
+      { id:'s1', name:'Request Received',   owner:'administrator', notify:true,  requiredDocs:['Enrolment Form'] },
+      { id:'s2', name:'Documents Verified', owner:'administrator', notify:false, requiredDocs:['ID Copy','Employment Contract'] },
+      { id:'s3', name:'Member Captured',    owner:'administrator', notify:true,  requiredDocs:[] },
+      { id:'s4', name:'Sent to Billing',    owner:'billing_admin', notify:true,  requiredDocs:[] },
+      { id:'s5', name:'Billing Complete',   owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On SLA Warning','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_exit_employee', categoryId:'cat1', name:'Exit Employee',
+    slaLabel:'5 Business Days', slaDays:5, slaUnit:'business_days',
+    escalationDays:3, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:true, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:['ID Copy','Termination Letter','Exit Form'],
+    stages:[
+      { id:'s1', name:'Request Received',   owner:'administrator', notify:true,  requiredDocs:['Exit Form'] },
+      { id:'s2', name:'Documents Verified', owner:'administrator', notify:false, requiredDocs:['ID Copy','Termination Letter'] },
+      { id:'s3', name:'Member Exited',      owner:'administrator', notify:true,  requiredDocs:[] },
+      { id:'s4', name:'Sent to Billing',    owner:'billing_admin', notify:true,  requiredDocs:[] },
+      { id:'s5', name:'Billing Complete',   owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On SLA Warning','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_membership_amendment', categoryId:'cat1', name:'Membership Amendment',
+    slaLabel:'3 Business Days', slaDays:3, slaUnit:'business_days',
+    escalationDays:2, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:true, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:['Amendment Form','Supporting Document'],
+    stages:[
+      { id:'s1', name:'Request Received', owner:'administrator', notify:true,  requiredDocs:['Amendment Form'] },
+      { id:'s2', name:'Verified',         owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Updated',          owner:'administrator', notify:true,  requiredDocs:[] },
+      { id:'s4', name:'Sent to Billing',  owner:'billing_admin', notify:true,  requiredDocs:[] },
+      { id:'s5', name:'Billing Complete', owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  // ── Claims ─────────────────────────────────────────────────────────────────
+  {
+    id:'ct_amcu_funeral', categoryId:'cat2', name:'AMCU Funeral Claim',
+    slaLabel:'48 Hours', slaDays:0.083, slaUnit:'hours', slaValue:48,
+    escalationDays:1, responsibleTeam:'Sesi Phiri',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:'u4', pool:null,    // Sesi Phiri
+    requiredDocs:['Claim Form','Death Certificate','Burial Order','ID Copy of Deceased'],
+    stages:[
+      { id:'s1', name:'Claim Received',     owner:'administrator', notify:true,  requiredDocs:['Claim Form'] },
+      { id:'s2', name:'Documents Verified', owner:'administrator', notify:true,  requiredDocs:['Death Certificate','Burial Order','ID Copy of Deceased'] },
+      { id:'s3', name:'Claim Assessed',     owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s4', name:'Payment Authorised', owner:'general_manager', notify:true, requiredDocs:[] },
+      { id:'s5', name:'Completed',          owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On SLA Warning','On Escalation','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_extended_funeral', categoryId:'cat2', name:'Extended Funeral Claim',
+    slaLabel:'5 Business Days', slaDays:5, slaUnit:'business_days',
+    escalationDays:3, responsibleTeam:'Daleen Taute',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:'u5', pool:null,    // Daleen Taute
+    requiredDocs:['Claim Form','Death Certificate','ID Copy of Deceased','Relationship Proof'],
+    stages:[
+      { id:'s1', name:'Claim Received',     owner:'billing_admin', notify:true,  requiredDocs:['Claim Form'] },
+      { id:'s2', name:'Documents Verified', owner:'billing_admin', notify:true,  requiredDocs:['Death Certificate','ID Copy of Deceased','Relationship Proof'] },
+      { id:'s3', name:'Claim Assessed',     owner:'billing_admin', notify:false, requiredDocs:[] },
+      { id:'s4', name:'Payment Authorised', owner:'general_manager', notify:true, requiredDocs:[] },
+      { id:'s5', name:'Completed',          owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On SLA Warning','On Escalation','On Completion'],
+    active:true,
+  },
+  // ── Beneficiary & Statements ───────────────────────────────────────────────
+  {
+    id:'ct_beneficiary', categoryId:'cat3', name:'Beneficiary Nomination Form',
+    slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
+    escalationDays:1, responsibleTeam:'Sesi Phiri',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:'u4', pool:null,    // Sesi Phiri
+    requiredDocs:['Beneficiary Nomination Form','ID Copy of Beneficiary'],
+    stages:[
+      { id:'s1', name:'Request Received', owner:'administrator', notify:true,  requiredDocs:['Beneficiary Nomination Form'] },
+      { id:'s2', name:'Verified',         owner:'administrator', notify:false, requiredDocs:['ID Copy of Beneficiary'] },
+      { id:'s3', name:'Updated',          owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_benefit_statement', categoryId:'cat3', name:'Benefit Statement Request',
+    slaLabel:'3 Business Days', slaDays:3, slaUnit:'business_days',
+    escalationDays:2, responsibleTeam:'Sesi Phiri',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:'u4', pool:null,    // Sesi Phiri
+    requiredDocs:['Member ID Confirmation'],
+    stages:[
+      { id:'s1', name:'Request Received',    owner:'administrator', notify:true,  requiredDocs:[] },
+      { id:'s2', name:'Statement Generated', owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Sent to Employer',    owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  // ── Billing & Payroll ──────────────────────────────────────────────────────
+  {
+    id:'ct_billing_query', categoryId:'cat4', name:'Payroll/Billing Query',
+    slaLabel:'3 Business Days', slaDays:3, slaUnit:'business_days',
+    escalationDays:2, responsibleTeam:'Billing Pool',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:null, pool:'billing',
+    requiredDocs:['Payroll Schedule','Query Detail'],
+    stages:[
+      { id:'s1', name:'Query Received',  owner:'billing_admin', notify:true,  requiredDocs:['Payroll Schedule'] },
+      { id:'s2', name:'Under Review',    owner:'billing_admin', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Resolved',        owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  // ── Employer Maintenance ───────────────────────────────────────────────────
+  {
+    id:'ct_employer_change', categoryId:'cat5', name:'Employer Information Change',
+    slaLabel:'3 Business Days', slaDays:3, slaUnit:'business_days',
+    escalationDays:2, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:['Change Request Form','Supporting Documents'],
+    stages:[
+      { id:'s1', name:'Request Received', owner:'administrator', notify:true,  requiredDocs:['Change Request Form'] },
+      { id:'s2', name:'Verified',         owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Updated',          owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  // ── Funeral Notification ───────────────────────────────────────────────────
+  {
+    id:'ct_funeral_notification', categoryId:'cat2', name:'Funeral Notification',
+    slaLabel:'24 Hours', slaDays:0.042, slaUnit:'hours', slaValue:24,
+    escalationDays:0.5, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:['Death Certificate','Notification Form'],
+    stages:[
+      { id:'s1', name:'Notification Received', owner:'administrator', notify:true,  requiredDocs:['Death Certificate'] },
+      { id:'s2', name:'Verified',              owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Fund Notified',          owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On Completion'],
+    active:true,
+  },
+  // ── General Query ──────────────────────────────────────────────────────────
+  {
+    id:'ct_general_query', categoryId:'cat6', name:'General Query',
+    slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
+    escalationDays:1, responsibleTeam:'General Administration Pool',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:null, pool:'general',
+    requiredDocs:[],
+    stages:[
+      { id:'s1', name:'Query Received', owner:'administrator', notify:true,  requiredDocs:[] },
+      { id:'s2', name:'Under Review',   owner:'administrator', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Resolved',       owner:'administrator', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  // ── INTERNAL ONLY — not visible to employers ───────────────────────────────
+  {
+    id:'ct_underwriting', categoryId:'cat7', name:'Medical Underwriting',
+    slaLabel:'10 Business Days', slaDays:10, slaUnit:'business_days',
+    escalationDays:7, responsibleTeam:'Leandre van der Merwe',
+    isBillingTrigger:false, isInternal:true,
+    directAssignTo:'u1', pool:null,    // Leandre
+    requiredDocs:['Medical Report','ID Copy','Underwriting Application'],
+    stages:[
+      { id:'s1', name:'Application Received', owner:'general_manager', notify:true,  requiredDocs:['Medical Report','Underwriting Application'] },
+      { id:'s2', name:'Medical Review',       owner:'general_manager', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Decision Made',        owner:'general_manager', notify:true,  requiredDocs:[] },
+      { id:'s4', name:'Employer Updated',     owner:'general_manager', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_internal_billing_review', categoryId:'cat7', name:'Billing Review (Internal)',
+    slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
+    escalationDays:1, responsibleTeam:'Billing Pool',
+    isBillingTrigger:false, isInternal:true,
+    directAssignTo:null, pool:'billing',
+    requiredDocs:[],
+    stages:[
+      { id:'s1', name:'Review Initiated', owner:'billing_admin', notify:true,  requiredDocs:[] },
+      { id:'s2', name:'Under Review',     owner:'billing_admin', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Review Complete',  owner:'billing_admin', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Completion'],
+    active:true,
+  },
+  {
+    id:'ct_escalation', categoryId:'cat7', name:'Escalation (Internal)',
+    slaLabel:'24 Hours', slaDays:0.042, slaUnit:'hours', slaValue:24,
+    escalationDays:0.5, responsibleTeam:'Leandre van der Merwe',
+    isBillingTrigger:false, isInternal:true,
+    directAssignTo:'u1', pool:null,
+    requiredDocs:[],
+    stages:[
+      { id:'s1', name:'Escalation Received',  owner:'general_manager', notify:true,  requiredDocs:[] },
+      { id:'s2', name:'Under Review',         owner:'general_manager', notify:false, requiredDocs:[] },
+      { id:'s3', name:'Resolution Reached',   owner:'general_manager', notify:true,  requiredDocs:[] },
+    ],
+    notifications:['On Submission','On Stage Change','On Completion'],
+    active:true,
+  },
+]
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function daysAgo(n) {
+  const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]
+}
+function daysFromNow(n) {
+  const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]
+}
+export { daysAgo, daysFromNow }
+
+export function genRef(prefix='AEB') {
+  return prefix + '-' + String(Date.now()).slice(-6)
+}
+
+export function calcSlaDate(caseType) {
+  const d = new Date()
+  if (caseType.slaUnit === 'hours') {
+    d.setTime(d.getTime() + (caseType.slaValue || 48) * 3600000)
+  } else {
+    d.setDate(d.getDate() + (caseType.slaDays || 5))
+  }
+  return d.toISOString().split('T')[0]
+}
+
+// Auto-allocate a case type to a user based on allocation rules
+export function allocateCase(caseType, users, pools, poolIndexes) {
+  // Direct assignment
+  if (caseType.directAssignTo) {
+    const u = users.find(x => x.id === caseType.directAssignTo && x.status === 'active')
+    return u?.id || ''
+  }
+  // Pool round-robin
+  if (caseType.pool && pools[caseType.pool]) {
+    const pool = pools[caseType.pool]
+    const activeMembers = pool.members.filter(uid => {
+      const u = users.find(x => x.id === uid)
+      if (!u || u.status !== 'active') return false
+      // Exclude if this case type is in their exclude list
+      if (u.allocation?.excludeTypes?.includes(caseType.id)) return false
+      return true
+    })
+    if (activeMembers.length === 0) return ''
+    const idx = (poolIndexes?.[caseType.pool] || 0) % activeMembers.length
+    return activeMembers[idx]
+  }
+  return ''
+}
+
+// ─── BILLING TRANSACTION TYPES ────────────────────────────────────────────────
+export const BILLING_TRIGGER_CASE_TYPES = [
+  'ct_new_employee', 'ct_exit_employee', 'ct_membership_amendment',
+]
+
+export const BILLING_STATUSES = [
+  'Pending Billing', 'Billing In Progress', 'Awaiting Information',
+  'Billing Updated', 'Billing Exception', 'Billing Complete',
+]
+
+// ─── STATUS CONFIG ────────────────────────────────────────────────────────────
+export const STATUS_CFG = {
+  'Submitted':            { bg:'#f0f9ff', color:'#0369a1', dot:'#0ea5e9'  },
+  'Received':             { bg:'#f0fdf4', color:'#166534', dot:'#22c55e'  },
+  'In Progress':          { bg:'#eff6ff', color:'#1d4ed8', dot:'#3b82f6'  },
+  'Awaiting Information': { bg:'#fffbeb', color:'#b45309', dot:'#f59e0b'  },
+  'Pending Billing':      { bg:'#fdf4ff', color:'#7e22ce', dot:'#a855f7'  },
+  'Sent to Billing':      { bg:'#fdf4ff', color:'#7e22ce', dot:'#a855f7'  },
+  'Escalated':            { bg:'#fff1f2', color:'#be123c', dot:'#f43f5e'  },
+  'Completed':            { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
+  'Closed':               { bg:'#f9fafb', color:'#374151', dot:'#9ca3af'  },
+  // Billing statuses
+  'Billing In Progress':  { bg:'#fdf4ff', color:'#7e22ce', dot:'#a855f7'  },
+  'Awaiting Information (Billing)':{ bg:'#fffbeb', color:'#b45309', dot:'#f59e0b' },
+  'Billing Updated':      { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
+  'Billing Exception':    { bg:'#fff1f2', color:'#be123c', dot:'#f43f5e'  },
+  'Billing Complete':     { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
+}
+export const CASE_STATUSES = ['Submitted','Received','In Progress','Awaiting Information','Escalated','Completed','Closed']
+
+export const PRIORITY_CFG = {
+  Low:      { bg:'#f0fdf4', color:'#15803d' },
+  Medium:   { bg:'#fffbeb', color:'#b45309' },
+  High:     { bg:'#fff7ed', color:'#c2410c' },
+  Critical: { bg:'#fff1f2', color:'#be123c' },
+}
+export const PRIORITIES = ['Low','Medium','High','Critical']
+
+export function slaStatus(slaDate, status) {
+  if (['Completed','Closed','Billing Complete'].includes(status)) return 'done'
+  const diff = Math.ceil((new Date(slaDate) - new Date()) / 86400000)
+  if (diff < 0)  return 'overdue'
+  if (diff === 0) return 'today'
+  if (diff <= 2)  return 'warning'
+  return 'ok'
+}
+export function slaDiff(slaDate) {
+  return Math.ceil((new Date(slaDate) - new Date()) / 86400000)
+}
+
+// ─── INITIAL CASES ────────────────────────────────────────────────────────────
+export const INITIAL_CASES = [
+  {
+    id:'c1', ref:'AEB-001001', workspace:'employer',
+    caseTypeId:'ct_amcu_funeral', employerId:'e6',
+    status:'In Progress', priority:'Critical',
+    assignedTo:'u4', createdBy:'u10',
+    memberName:'Sipho Zulu', memberId:'7809125432088',
+    currentStage:1, stageHistory:['s1'],
+    created:daysAgo(1), slaDate:daysFromNow(0),
+    description:'Funeral claim following death of member on duty.',
+    billingTaskId:null,
+    notes:[{ user:'u4', date:daysAgo(0), text:'Death certificate received. Burial order still outstanding.' }],
+    documents:[{ name:'Claim_Form_Zulu.pdf', size:'0.8 MB', uploadedBy:'u10', date:daysAgo(1) }],
+    audit:[
+      { time:new Date(Date.now()-86400000).toISOString(), user:'u10', action:'Case AEB-001001 created', type:'create' },
+      { time:new Date(Date.now()-84600000).toISOString(), user:'system', action:'Auto-assigned to Sesi Phiri', type:'assign' },
+      { time:new Date(Date.now()-43200000).toISOString(), user:'u4', action:'Stage advanced to "Documents Verified"', type:'stage' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u4', from:daysAgo(1) }],
+  },
+  {
+    id:'c2', ref:'AEB-001002', workspace:'employer',
+    caseTypeId:'ct_new_employee', employerId:'e1',
+    status:'In Progress', priority:'Medium',
+    assignedTo:'u2', createdBy:'u10',
+    memberName:'Batch: 12 New Employees', memberId:null,
+    currentStage:1, stageHistory:['s1'],
+    created:daysAgo(1), slaDate:daysFromNow(1),
+    description:'New employee batch from Steelworks SA — Vereeniging plant.',
+    billingTaskId:null,
+    notes:[], documents:[{ name:'Enrolment_Batch_SW.zip', size:'3.2 MB', uploadedBy:'u10', date:daysAgo(1) }],
+    audit:[
+      { time:new Date(Date.now()-86400000).toISOString(), user:'u10', action:'Case AEB-001002 created', type:'create' },
+      { time:new Date(Date.now()-85000000).toISOString(), user:'system', action:'Auto-assigned to Nokulunga Nyundu (Round Robin)', type:'assign' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u2', from:daysAgo(1) }],
+  },
+  {
+    id:'c3', ref:'AEB-001003', workspace:'employer',
+    caseTypeId:'ct_exit_employee', employerId:'e5',
+    status:'Awaiting Information', priority:'Medium',
+    assignedTo:'u6', createdBy:'u10',
+    memberName:'Batch: 32 Exits (Section 189)', memberId:null,
+    currentStage:1, stageHistory:['s1'],
+    created:daysAgo(3), slaDate:daysFromNow(2),
+    description:'Section 189 retrenchment — TransAfrica Logistics.',
+    billingTaskId:null,
+    notes:[{ user:'u6', date:daysAgo(1), text:'Termination letters outstanding for 8 members.' }],
+    documents:[{ name:'Exit_List_TA.xlsx', size:'1.1 MB', uploadedBy:'u10', date:daysAgo(3) }],
+    audit:[
+      { time:new Date(Date.now()-259200000).toISOString(), user:'u10', action:'Case AEB-001003 created', type:'create' },
+      { time:new Date(Date.now()-259000000).toISOString(), user:'system', action:'Auto-assigned to Mahlatse Manyathi (Round Robin)', type:'assign' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u6', from:daysAgo(3) }],
+  },
+  {
+    id:'c4', ref:'AEB-001004', workspace:'employer',
+    caseTypeId:'ct_beneficiary', employerId:'e2',
+    status:'Submitted', priority:'Low',
+    assignedTo:'u4', createdBy:'u11',
+    memberName:'Thabo Dlamini', memberId:'8802143219087',
+    currentStage:0, stageHistory:[],
+    created:daysAgo(0), slaDate:daysFromNow(2),
+    description:'Beneficiary nomination update — new spouse added.',
+    billingTaskId:null,
+    notes:[], documents:[{ name:'Beneficiary_Form_Dlamini.pdf', size:'0.4 MB', uploadedBy:'u11', date:daysAgo(0) }],
+    audit:[
+      { time:new Date().toISOString(), user:'u11', action:'Case AEB-001004 created', type:'create' },
+      { time:new Date().toISOString(), user:'system', action:'Auto-assigned to Sesi Phiri (Direct)', type:'assign' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u4', from:daysAgo(0) }],
+  },
+  {
+    id:'c5', ref:'AEB-001005', workspace:'employer',
+    caseTypeId:'ct_new_employee', employerId:'e4',
+    status:'Sent to Billing', priority:'Medium',
+    assignedTo:'u5', createdBy:'u12',
+    memberName:'Pieter Joubert', memberId:'9001015432083',
+    currentStage:3, stageHistory:['s1','s2','s3'],
+    created:daysAgo(4), slaDate:daysFromNow(0),
+    description:'New employee — BuildRight Holdings, site supervisor role.',
+    billingTaskId:'bt1',
+    notes:[], documents:[{ name:'Enrolment_Joubert.pdf', size:'0.9 MB', uploadedBy:'u12', date:daysAgo(4) }],
+    audit:[
+      { time:new Date(Date.now()-345600000).toISOString(), user:'u12', action:'Case AEB-001005 created', type:'create' },
+      { time:new Date(Date.now()-300000000).toISOString(), user:'u3', action:'Stage advanced to "Documents Verified"', type:'stage' },
+      { time:new Date(Date.now()-200000000).toISOString(), user:'u3', action:'Stage advanced to "Member Captured"', type:'stage' },
+      { time:new Date(Date.now()-100000000).toISOString(), user:'u3', action:'Complete & Send to Billing — Billing Task bt1 created', type:'billing' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u3', from:daysAgo(4) },{ user:'u5', from:daysAgo(1) }],
+  },
+  // Internal case
+  {
+    id:'c6', ref:'AEB-INT001', workspace:'internal',
+    caseTypeId:'ct_underwriting', employerId:'e2',
+    status:'In Progress', priority:'High',
+    assignedTo:'u1', createdBy:'u2',
+    memberName:'Johannes Pretorius', memberId:'6507124512083',
+    currentStage:1, stageHistory:['s1'],
+    created:daysAgo(2), slaDate:daysFromNow(7),
+    description:'Medical underwriting required — member over 65 joining MineTrust Group.',
+    billingTaskId:null, linkedCaseId:null,
+    notes:[{ user:'u1', date:daysAgo(1), text:'Medical report received. Review in progress.' }],
+    documents:[{ name:'Medical_Report_Pretorius.pdf', size:'2.1 MB', uploadedBy:'u2', date:daysAgo(2) }],
+    audit:[
+      { time:new Date(Date.now()-172800000).toISOString(), user:'u2', action:'Internal Case AEB-INT001 created', type:'create' },
+      { time:new Date(Date.now()-172000000).toISOString(), user:'system', action:'Auto-assigned to Leandre van der Merwe (Direct)', type:'assign' },
+    ],
+    escalated:false, ownerHistory:[{ user:'u1', from:daysAgo(2) }],
+  },
+]
+
+// ─── INITIAL BILLING TASKS ─────────────────────────────────────────────────────
+export const INITIAL_BILLING_TASKS = [
+  {
+    id:'bt1', ref:'BT-001001',
+    linkedCaseId:'c5', linkedCaseRef:'AEB-001005',
+    employerId:'e4', memberName:'Pieter Joubert',
+    transactionType:'New Employee',
+    effectiveDate: daysFromNow(-4),
+    assignedTo:'u5',
+    status:'Billing In Progress',
+    priority:'Medium',
+    createdBy:'u3',
+    created:daysAgo(1),
+    notes:[],
+    audit:[
+      { time:new Date(Date.now()-86400000).toISOString(), user:'u3', action:'Billing Task BT-001001 created from AEB-001005', type:'create' },
+      { time:new Date(Date.now()-86000000).toISOString(), user:'system', action:'Assigned to Daleen Taute (Billing Pool)', type:'assign' },
+    ],
+  },
+]
