@@ -15,6 +15,7 @@ import CaseTypeConfig from './pages/admin/CaseTypeConfig.jsx'
 import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
+import PWAInstallPrompt from './PWAInstallPrompt.jsx'
 
 export default function App() {
   const [user, setUser]               = useState(null)
@@ -29,7 +30,20 @@ export default function App() {
   const [users, setUsers]             = useState(INITIAL_USERS)
   const [openCase, setOpenCase]       = useState(null)
 
-  if (!user) return <LoginPage onLogin={u => { setUser(u); setPage('dashboard') }} />
+  if (!user) return (
+    <>
+      <LoginPage onLogin={u => {
+        setUser(u)
+        // Handle PWA shortcut URLs
+        const params = new URLSearchParams(window.location.search)
+        const action = params.get('action')
+        if (action === 'new-case')     setPage('cases')
+        else if (action === 'email-intake') setPage('email_intake')
+        else setPage('dashboard')
+      }} />
+      <PWAInstallPrompt />
+    </>
+  )
 
   const role = user.role
   const isGM       = role === 'general_manager'
@@ -133,6 +147,9 @@ export default function App() {
           onAddBillingTask={addBillingTask}
         />
       )}
+
+      {/* PWA install prompt — shows "Add to Home Screen" banner */}
+      <PWAInstallPrompt />
     </div>
   )
 }
