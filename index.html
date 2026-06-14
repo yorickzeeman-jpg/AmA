@@ -2,15 +2,94 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- PWA essential meta tags -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AEB Portal" />
+    <meta name="application-name" content="AEB Portal" />
+    <meta name="theme-color" content="#07122a" />
+    <meta name="msapplication-TileColor" content="#07122a" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144.png" />
+
+    <!-- SEO / description -->
+    <meta name="description" content="Amadwala Employee Benefits — Employer Services Platform. Manage members, claims and billing." />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- Apple touch icons — required for iOS "Add to Home Screen" -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png" />
+    <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128.png" />
+    <link rel="apple-touch-icon" sizes="96x96"   href="/icons/icon-96.png" />
+    <link rel="apple-touch-icon" sizes="72x72"   href="/icons/icon-72.png" />
+
+    <!-- iOS splash screens — shows branded screen while app loads -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
     <title>AEB Portal — Employer Services Platform</title>
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <style>
+      /* Prevent flash of unstyled content on mobile */
+      html, body { background: #07122a; margin: 0; padding: 0; }
+      /* Safe area insets for iPhone notch / Dynamic Island */
+      #root {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Register service worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+              console.log('[AEB Portal] Service worker registered:', reg.scope)
+
+              // Check for updates every time the app is opened
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New version available — silently activate it
+                    // (staff get the update next time they open the app)
+                    console.log('[AEB Portal] New version available — will activate on next open')
+                    newWorker.postMessage('skipWaiting')
+                  }
+                })
+              })
+            })
+            .catch(err => console.warn('[AEB Portal] Service worker registration failed:', err))
+        })
+
+        // Reload page when new service worker takes over
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          console.log('[AEB Portal] New version active')
+          // Don't auto-reload — let user finish what they're doing
+          // The next natural navigation will use the new version
+        })
+      }
+    </script>
   </body>
 </html>
