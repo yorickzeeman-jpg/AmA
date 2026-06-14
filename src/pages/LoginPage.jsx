@@ -15,7 +15,7 @@ export default function LoginPage({ onLogin }) {
     setError(''); setLoading(true)
     try {
       // Convert name to internal email format
-      const internalEmail = email.trim().toLowerCase().replace(/\s+/g, '') + '@login'
+      const internalEmail = email.trim().toLowerCase().replace(/\s+/g, '') + '@x'
       await signIn(internalEmail, password)
       const profile = await getStaffProfile(internalEmail)
       onLogin({

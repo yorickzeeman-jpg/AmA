@@ -49,19 +49,19 @@ export const ROLE_PERMISSIONS = {
 
 // ─── NAMED AEB STAFF ──────────────────────────────────────────────────────────
 export const INITIAL_USERS = [
-  { id:'u1', name:'Leandre van der Merwe', email:'leandre@login',  role:'general_manager', status:'active', employer:null, avatar:'LV', joined:'2022-01-01',
+  { id:'u1', name:'Leandre van der Merwe', email:'leandre@x',  role:'general_manager', status:'active', employer:null, avatar:'LV', joined:'2022-01-01',
     allocation:{ directTypes:['ct_underwriting'], pool:null, excludeTypes:[] } },
-  { id:'u2', name:'Nokulunga Nyundu',      email:'nokulunga@login', role:'administrator',   status:'active', employer:null, avatar:'NN', joined:'2022-03-01',
+  { id:'u2', name:'Nokulunga Nyundu',      email:'nokulunga@x', role:'administrator',   status:'active', employer:null, avatar:'NN', joined:'2022-03-01',
     allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting'] } },
-  { id:'u3', name:'Tevin Nxumalo',         email:'tevin@login',     role:'administrator',   status:'active', employer:null, avatar:'TN', joined:'2022-06-01',
+  { id:'u3', name:'Tevin Nxumalo',         email:'tevin@x',     role:'administrator',   status:'active', employer:null, avatar:'TN', joined:'2022-06-01',
     allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting','ct_amcu_funeral'] } },
-  { id:'u4', name:'Sesi Phiri',            email:'sesi@login',      role:'administrator',   status:'active', employer:null, avatar:'SP', joined:'2023-01-01',
+  { id:'u4', name:'Sesi Phiri',            email:'sesi@x',      role:'administrator',   status:'active', employer:null, avatar:'SP', joined:'2023-01-01',
     allocation:{ directTypes:['ct_amcu_funeral','ct_benefit_statement','ct_beneficiary'], pool:null, excludeTypes:[] } },
-  { id:'u5', name:'Daleen Taute',          email:'daleen@login',    role:'billing_admin',   status:'active', employer:null, avatar:'DT', joined:'2022-01-01',
+  { id:'u5', name:'Daleen Taute',          email:'daleen@x',    role:'billing_admin',   status:'active', employer:null, avatar:'DT', joined:'2022-01-01',
     allocation:{ directTypes:['ct_extended_funeral'], pool:'billing', excludeTypes:[] } },
-  { id:'u6', name:'Mahlatse Manyathi',     email:'mahlatse@login',  role:'administrator',   status:'active', employer:null, avatar:'MM', joined:'2023-04-01',
+  { id:'u6', name:'Mahlatse Manyathi',     email:'mahlatse@x',  role:'administrator',   status:'active', employer:null, avatar:'MM', joined:'2023-04-01',
     allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting'] } },
-  { id:'u7', name:'Ithasia',               email:'ithasia@login',   role:'billing_admin',   status:'active', employer:null, avatar:'IT', joined:'2023-06-01',
+  { id:'u7', name:'Ithasia',               email:'ithasia@x',   role:'billing_admin',   status:'active', employer:null, avatar:'IT', joined:'2023-06-01',
     allocation:{ directTypes:[], pool:'billing', excludeTypes:[] } },
   // Employer contacts
   { id:'u10', name:'Sandra Botha',     email:'sandra@steelworks.co.za',   role:'employer_admin', status:'active', employer:'e1', avatar:'SB', joined:'2024-01-10', allocation:null },
