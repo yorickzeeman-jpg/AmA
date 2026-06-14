@@ -7,14 +7,19 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
 // ── CUSTOM AUTH — name + password, no email ──────────────────
 export async function signInWithName(name, password) {
+  // Step 1: find user by name only (case-insensitive)
   const { data, error } = await supabase
     .from('portal_users')
     .select('*')
-    .eq('name', name)
-    .eq('password', password)
+    .ilike('name', name.trim())
     .eq('status', 'active')
     .single()
+
   if (error || !data) throw new Error('Incorrect name or password.')
+
+  // Step 2: check password
+  if (data.password !== password.trim()) throw new Error('Incorrect name or password.')
+
   return data
 }
 
