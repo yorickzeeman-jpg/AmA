@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { T, BILLING_STATUSES, employers as EMP } from '../data.js'
+import { T, BILLING_STATUSES } from '../data.js'
 import { Icon, StatusBadge, Card, CardHead, Btn, Modal, Field, selectSt, Empty } from '../ui.jsx'
 
 export default function BillingWorkbench({ billingTasks, cases, employers, users, currentUser, onUpdateBilling }) {
