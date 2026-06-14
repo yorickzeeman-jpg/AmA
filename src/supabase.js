@@ -5,7 +5,19 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-// ── AUTH ─────────────────────────────────────────────────────
+// ── CUSTOM AUTH — name + password, no email ──────────────────
+export async function signInWithName(name, password) {
+  const { data, error } = await supabase
+    .from('portal_users')
+    .select('*')
+    .eq('name', name)
+    .eq('password', password)
+    .eq('status', 'active')
+    .single()
+  if (error || !data) throw new Error('Incorrect name or password.')
+  return data
+}
+
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
@@ -13,15 +25,14 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
-  await supabase.auth.signOut()
+  // Just clear local — no auth session to sign out of
+  return true
 }
 
 export async function getSession() {
-  const { data } = await supabase.auth.getSession()
-  return data.session
+  return null
 }
 
-// ── STAFF PROFILE ─────────────────────────────────────────────
 export async function getStaffProfile(email) {
   const { data, error } = await supabase
     .from('staff')
