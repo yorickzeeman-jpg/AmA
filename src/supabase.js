@@ -6,21 +6,45 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
 // ── CUSTOM AUTH — name + password, no email ──────────────────
+// Local fallback users — used if Supabase is unreachable
+const LOCAL_USERS = [
+  { id:'u0', name:'Yorick',    password:'Yorick2017', role:'general_manager', avatar:'YZ', status:'active' },
+  { id:'u1', name:'Leandre',   password:'Yorick2017', role:'general_manager', avatar:'LV', status:'active' },
+  { id:'u2', name:'Nokulunga', password:'Yorick2017', role:'administrator',   avatar:'NN', status:'active' },
+  { id:'u3', name:'Tevin',     password:'Yorick2017', role:'administrator',   avatar:'TN', status:'active' },
+  { id:'u4', name:'Sesi',      password:'Yorick2017', role:'administrator',   avatar:'SP', status:'active' },
+  { id:'u5', name:'Daleen',    password:'Yorick2017', role:'billing_admin',   avatar:'DT', status:'active' },
+  { id:'u6', name:'Mahlatse',  password:'Yorick2017', role:'administrator',   avatar:'MM', status:'active' },
+  { id:'u7', name:'Ithasia',   password:'Yorick2017', role:'billing_admin',   avatar:'IT', status:'active' },
+]
+
 export async function signInWithName(name, password) {
-  // Step 1: find user by name only (case-insensitive)
-  const { data, error } = await supabase
-    .from('portal_users')
-    .select('*')
-    .ilike('name', name.trim())
-    .eq('status', 'active')
-    .single()
+  // Try Supabase first
+  try {
+    const { data, error } = await supabase
+      .from('portal_users')
+      .select('*')
+      .ilike('name', name.trim())
+      .eq('status', 'active')
+      .single()
 
-  if (error || !data) throw new Error('Incorrect name or password.')
+    if (!error && data) {
+      if (data.password !== password.trim()) throw new Error('Incorrect name or password.')
+      return data
+    }
+  } catch (e) {
+    if (e.message === 'Incorrect name or password.') throw e
+    // Supabase unreachable — fall through to local
+  }
 
-  // Step 2: check password
-  if (data.password !== password.trim()) throw new Error('Incorrect name or password.')
-
-  return data
+  // Fallback: check local users
+  const local = LOCAL_USERS.find(u =>
+    u.name.toLowerCase() === name.trim().toLowerCase() &&
+    u.password === password.trim() &&
+    u.status === 'active'
+  )
+  if (!local) throw new Error('Incorrect name or password.')
+  return local
 }
 
 export async function signIn(email, password) {
