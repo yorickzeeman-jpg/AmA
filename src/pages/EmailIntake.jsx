@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { T, genRef, calcSlaDate, allocateCase } from '../data.js'
+import { T, genRef, calcSlaDate, allocateCase, initWorkflow } from '../data.js'
 import { inputSt, selectSt, StatusBadge } from '../ui.jsx'
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -908,6 +908,7 @@ function ReviewPhase({ parseResult, uploadedFile, caseTypes, categories, employe
         memberId:fields.idNumber||null, source:'email_import', sourceFile:uploadedFile?.name,
         currentStage:0, stageHistory:[], created:today, slaDate,
         description:desc.trim(), billingRequired:billing, billingTaskId:null,
+        workflow: initWorkflow(selCT),
         notes:[], documents:docs, extFamily:r.extFamily||[],
         emailData:{ subject:r.emailSubject, from:r.emailFrom, fileName:uploadedFile?.name, extractedFields:fields, processedAt:r.processedAt },
         audit, escalated:false,

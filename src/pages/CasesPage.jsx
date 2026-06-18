@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { T, CASE_STATUSES, PRIORITIES, calcSlaDate, allocateCase, BILLING_TRIGGER_CASE_TYPES, genRef } from '../data.js'
+import { T, CASE_STATUSES, PRIORITIES, calcSlaDate, allocateCase, BILLING_TRIGGER_CASE_TYPES, genRef, initWorkflow } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Card, Btn, Modal, Field, inputSt, selectSt, Empty } from '../ui.jsx'
 
 export default function CasesPage({ cases, caseTypes, categories, employers, users, currentUser, onOpenCase, onAddCase, onAddBillingTask, initialFilter, workspace='employer' }) {
@@ -359,6 +359,7 @@ function NewCaseModal({ caseTypes, categories, employers, users, currentUser, wo
       slaDate:     selectedCT ? calcSlaDate(selectedCT) : new Date(Date.now()+5*86400000).toISOString().split('T')[0],
       description: form.description,
       billingTaskId: null,
+      workflow:      initWorkflow(form.caseTypeId),
       notes:       [],
       documents,
       audit,

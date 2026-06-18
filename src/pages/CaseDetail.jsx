@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { T, CASE_STATUSES, PRIORITIES, genRef, calcSlaDate } from '../data.js'
+import { T, CASE_STATUSES, PRIORITIES, genRef, calcSlaDate, WORKFLOW_TEMPLATES, CASE_TYPE_WORKFLOW_MAP, STEP_STATUSES, initWorkflow, workflowProgress } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn } from '../ui.jsx'
 
 const STAGE_CLR = { done:'#059669', active:'#1e5fd9', pending:T.gray }
@@ -205,42 +205,10 @@ export default function CaseDetail({ c, caseType, category, employer, users, cur
 
           {/* WORKFLOW */}
           {tab==='Workflow' && (
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:16 }}>
-                Workflow — {caseType?.name} · Stage {Math.min(currentStageIdx+1, stages.length)} of {stages.length}
-              </div>
-              {stages.map((stage,idx)=>{
-                const done   = idx < currentStageIdx
-                const active = idx === currentStageIdx
-                const clr    = done ? STAGE_CLR.done : active ? STAGE_CLR.active : STAGE_CLR.pending
-                return (
-                  <div key={stage.id} style={{ display:'flex', gap:14, marginBottom:20, position:'relative' }}>
-                    {idx < stages.length-1 && <div style={{ position:'absolute', left:15, top:32, width:2, height:'calc(100% + 4px)', background:done?'#d1fae5':'#e5e7eb' }}/>}
-                    <div style={{ width:32, height:32, borderRadius:'50%', border:`2px solid ${clr}`, background:done?'#d1fae5':active?'#eff6ff':'#f9fafb', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      {done ? <Icon name="check" size={14} color={T.green}/> : <span style={{ fontSize:11, fontWeight:700, color:clr }}>{idx+1}</span>}
-                    </div>
-                    <div style={{ flex:1, paddingTop:4 }}>
-                      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                        <span style={{ fontSize:14, fontWeight:active?700:500, color:idx>currentStageIdx?T.gray:T.text }}>{stage.name}</span>
-                        {active && <span style={{ fontSize:10, fontWeight:700, color:T.blue, background:'#eff6ff', padding:'2px 8px', borderRadius:20 }}>CURRENT</span>}
-                        {done && <span style={{ fontSize:10, fontWeight:700, color:T.green, background:'#d1fae5', padding:'2px 8px', borderRadius:20 }}>DONE</span>}
-                      </div>
-                      <div style={{ fontSize:11, color:T.gray, marginTop:2 }}>
-                        Owner: <span style={{ fontWeight:600 }}>{stage.owner?.replace(/_/g,' ')}</span>
-                        {stage.notify && <> · <span style={{ color:T.amber }}>Notify on completion</span></>}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {/* Billing stage note */}
-              {caseType?.isBillingTrigger && (
-                <div style={{ background:'#f5f3ff', borderRadius:9, padding:'12px 14px', border:'1px solid #ddd6fe', marginTop:8 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:T.purple, marginBottom:3 }}>Billing Workflow</div>
-                  <div style={{ fontSize:12, color:'#6d28d9' }}>After the final stage, use "Complete & Send to Billing" to create a Billing Task and notify the billing team.</div>
-                </div>
-              )}
-            </div>
+            <WorkflowPanel
+              c={c} caseType={caseType} users={users}
+              currentUser={currentUser} onUpdate={onUpdate}
+            />
           )}
 
           {/* DOCUMENTS */}
@@ -311,6 +279,204 @@ export default function CaseDetail({ c, caseType, category, employer, users, cur
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKFLOW PANEL COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+function WorkflowPanel({ c, caseType, users, currentUser, onUpdate }) {
+  const [expandedStep, setExpandedStep] = useState(null)
+  const [stepNotes, setStepNotes] = useState({})
+
+  // Initialise workflow if not present on the case
+  const workflow = c.workflow || initWorkflow(c.caseTypeId)
+  if (!workflow) {
+    return (
+      <div style={{ textAlign:'center', padding:32, color:T.gray }}>
+        <div style={{ fontSize:24, marginBottom:8 }}>⚙️</div>
+        <div style={{ fontSize:13 }}>No workflow template configured for this case type.</div>
+      </div>
+    )
+  }
+
+  const progress = workflowProgress(workflow)
+  const steps    = workflow.steps || []
+  const activeIdx = steps.findIndex(s => s.status === 'Not Started' || s.status === 'In Progress' || s.status === 'Waiting for Information')
+
+  function updateStep(stepId, updates) {
+    const newSteps = steps.map(s => s.id === stepId ? { ...s, ...updates } : s)
+    const newWorkflow = { ...workflow, steps: newSteps }
+    // Check if all steps done
+    const allDone = newSteps.every(s => s.status === 'Completed' || s.status === 'Skipped')
+    if (allDone) newWorkflow.completedAt = new Date().toISOString()
+    const audit = [...(c.audit||[]), {
+      time: new Date().toISOString(),
+      user: currentUser.id,
+      action: `Workflow step "${steps.find(s=>s.id===stepId)?.name}" updated to "${updates.status || 'updated'}"`,
+      type: 'workflow',
+    }]
+    onUpdate({ ...c, workflow: newWorkflow, audit })
+  }
+
+  function completeStep(step) {
+    const hasMissingDocs = step.requiredDocs?.length > 0 &&
+      step.documents?.length < step.requiredDocs.length
+    if (hasMissingDocs) {
+      alert(`Please upload all required documents before completing this step:\n${step.requiredDocs.join(', ')}`)
+      return
+    }
+    updateStep(step.id, {
+      status:      'Completed',
+      completedAt: new Date().toISOString(),
+      notes:       stepNotes[step.id] || step.notes || '',
+    })
+    // Auto-actions
+    if (step.autoAction === 'create_billing_task') {
+      alert('Auto-action: Billing task will be created and assigned to billing queue.')
+    } else if (step.autoAction === 'notify_member') {
+      alert('Auto-action: Member notification sent.')
+    } else if (step.autoAction === 'create_followup_reminder') {
+      alert('Auto-action: Follow-up reminder created.')
+    }
+  }
+
+  const statusColors = {
+    'Not Started':             { bg:'#f9fafb', color:T.gray,   dot:'#d1d5db' },
+    'In Progress':             { bg:'#eff6ff', color:T.blue,   dot:T.blue    },
+    'Completed':               { bg:'#f0fdf4', color:T.green,  dot:T.green   },
+    'Skipped':                 { bg:'#f9fafb', color:'#9ca3af',dot:'#d1d5db' },
+    'Waiting for Information': { bg:'#fffbeb', color:T.amber,  dot:T.amber   },
+  }
+
+  const statusIcons = {
+    'Not Started':             '○',
+    'In Progress':             '⏳',
+    'Completed':               '✅',
+    'Skipped':                 '⏭',
+    'Waiting for Information': '⚠️',
+  }
+
+  return (
+    <div>
+      {/* Progress header */}
+      <div style={{ background:'#f9fafb', borderRadius:10, padding:'14px 16px', marginBottom:18, border:`1px solid ${T.border}` }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{workflow.templateName}</div>
+            <div style={{ fontSize:11, color:T.gray }}>{steps.filter(s=>s.status==='Completed').length} of {steps.length} steps completed</div>
+          </div>
+          <div style={{ fontSize:24, fontWeight:800, color:progress===100?T.green:T.orange }}>{progress}%</div>
+        </div>
+        <div style={{ height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${progress}%`, background:progress===100?T.green:T.orange, borderRadius:4, transition:'width .4s ease' }}/>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {steps.map((step, idx) => {
+          const isActive   = idx === activeIdx
+          const sc         = statusColors[step.status] || statusColors['Not Started']
+          const isExpanded = expandedStep === step.id
+          const canAct     = !['employer_admin','employer_user'].includes(currentUser.role)
+
+          return (
+            <div key={step.id} style={{ border:`1px solid ${isActive?T.orange:T.border}`, borderRadius:10, overflow:'hidden', background:isActive?T.orangeL+'40':'#fff' }}>
+              {/* Step header */}
+              <div
+                onClick={() => setExpandedStep(isExpanded ? null : step.id)}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', cursor:'pointer' }}
+              >
+                {/* Step number */}
+                <div style={{ width:28, height:28, borderRadius:'50%', background:sc.bg, border:`2px solid ${sc.dot}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>
+                  {step.status === 'Completed' ? '✓' : step.status === 'Skipped' ? '⏭' : <span style={{ fontSize:11, fontWeight:700, color:sc.color }}>{idx+1}</span>}
+                </div>
+
+                {/* Step info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                    <span style={{ fontSize:13, fontWeight:isActive?700:500, color:T.text }}>{step.name}</span>
+                    {isActive && <span style={{ fontSize:9, fontWeight:700, color:T.orange, background:T.orangeL, padding:'2px 7px', borderRadius:20 }}>CURRENT</span>}
+                    {step.requiredDocs?.length > 0 && (
+                      <span style={{ fontSize:9, color:T.blue, background:'#eff6ff', padding:'2px 7px', borderRadius:20 }}>📎 {step.requiredDocs.length} doc{step.requiredDocs.length!==1?'s':''} required</span>
+                    )}
+                    {step.autoAction && (
+                      <span style={{ fontSize:9, color:T.purple, background:'#f5f3ff', padding:'2px 7px', borderRadius:20 }}>⚡ Auto-action</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize:11, color:T.gray, marginTop:1 }}>SLA: {step.slaDays} day{step.slaDays!==1?'s':''}{step.completedAt ? ` · Completed ${step.completedAt.split('T')[0]}` : ''}</div>
+                </div>
+
+                {/* Status badge */}
+                <span style={{ fontSize:10, fontWeight:700, color:sc.color, background:sc.bg, padding:'3px 9px', borderRadius:20, border:`1px solid ${sc.dot}20`, whiteSpace:'nowrap', flexShrink:0 }}>
+                  {statusIcons[step.status]} {step.status}
+                </span>
+                <span style={{ color:T.gray, fontSize:12 }}>{isExpanded?'▲':'▼'}</span>
+              </div>
+
+              {/* Expanded step controls */}
+              {isExpanded && canAct && (
+                <div style={{ padding:'12px 14px', borderTop:`1px solid ${T.border}`, background:'#fafafa' }}>
+                  {/* Required docs checklist */}
+                  {step.requiredDocs?.length > 0 && (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:6 }}>Required Documents</div>
+                      {step.requiredDocs.map(doc => (
+                        <div key={doc} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, marginBottom:4 }}>
+                          <span style={{ color:'#d1d5db' }}>○</span>
+                          <span style={{ color:T.gray }}>{doc}</span>
+                          <span style={{ fontSize:10, color:T.amber, fontWeight:700 }}>OUTSTANDING</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:5 }}>Step Notes</div>
+                    <textarea
+                      value={stepNotes[step.id] ?? step.notes ?? ''}
+                      onChange={e => setStepNotes(n => ({...n, [step.id]: e.target.value}))}
+                      placeholder="Add notes for this step…"
+                      style={{ width:'100%', minHeight:56, padding:8, border:`1px solid ${T.border}`, borderRadius:7, fontSize:12, resize:'vertical', boxSizing:'border-box', fontFamily:'inherit' }}
+                    />
+                  </div>
+
+                  {/* Status controls */}
+                  <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
+                    {STEP_STATUSES.filter(s => s !== step.status).map(s => (
+                      <button key={s} onClick={() => updateStep(step.id, { status:s })}
+                        style={{ padding:'5px 11px', borderRadius:20, border:`1px solid ${T.border}`, background:'#fff', color:T.text, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>
+                        {statusIcons[s]} {s}
+                      </button>
+                    ))}
+                    {step.status !== 'Completed' && (
+                      <button onClick={() => completeStep(step)}
+                        style={{ padding:'5px 14px', borderRadius:20, background:T.green, border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                        ✓ Mark Complete
+                      </button>
+                    )}
+                  </div>
+
+                  {step.autoAction && (
+                    <div style={{ marginTop:8, fontSize:11, color:T.purple, background:'#f5f3ff', padding:'6px 10px', borderRadius:7 }}>
+                      ⚡ On completion: {
+                        step.autoAction === 'create_billing_task'         ? 'Billing task created & assigned to Daleen / Ithasia' :
+                        step.autoAction === 'notify_member'               ? 'Member notification sent automatically' :
+                        step.autoAction === 'create_followup_reminder'    ? 'Follow-up reminder created' :
+                        step.autoAction === 'notify_member_update_parent' ? 'Member notified & parent case updated' :
+                        step.autoAction
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

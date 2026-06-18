@@ -572,3 +572,267 @@ export const INITIAL_BILLING_TASKS = [
     ],
   },
 ]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKFLOW TEMPLATES — sourced from Cases.xlsx
+// Each template has steps with SLA targets, required docs, and automation rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const WORKFLOW_TEMPLATES = {
+
+  // ── NEW BUSINESS ───────────────────────────────────────────────────────────
+  'wf_new': {
+    id: 'wf_new', name: 'New', category: 'New Business',
+    steps: [
+      { id:'s1', name:'Verify Benefit',          slaDays:1, requiredDocs:[],                          autoAction:null },
+      { id:'s2', name:'Consultation',             slaDays:2, requiredDocs:[],                          autoAction:null },
+      { id:'s3', name:'Medical Application',      slaDays:3, requiredDocs:['Medical Application Form'], autoAction:null },
+      { id:'s4', name:'Follow-Up',                slaDays:3, requiredDocs:[],                          autoAction:null },
+      { id:'s5', name:'Submit',                   slaDays:1, requiredDocs:['Completed Application'],   autoAction:null },
+      { id:'s6', name:'Follow-Up (Submission)',   slaDays:5, requiredDocs:[],                          autoAction:null },
+      { id:'s7', name:'Feedback to EE & ER',      slaDays:1, requiredDocs:[],                          autoAction:'create_billing_task' },
+    ],
+  },
+
+  'wf_underwriting': {
+    id: 'wf_underwriting', name: 'Underwriting', category: 'New Business',
+    steps: [
+      { id:'s1', name:'Verify Letter',          slaDays:1, requiredDocs:['Underwriting Letter'],    autoAction:null },
+      { id:'s2', name:'Notify Member',           slaDays:1, requiredDocs:[],                         autoAction:'notify_member' },
+      { id:'s3', name:'Arrange Nurse Appointment',slaDays:3,requiredDocs:[],                         autoAction:null },
+      { id:'s4', name:'First Reminder',          slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s5', name:'Second Reminder',         slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s6', name:'Final Reminder',          slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s7', name:'Decision Letter',         slaDays:2, requiredDocs:['Decision Letter'],        autoAction:'notify_member_update_parent' },
+    ],
+  },
+
+  'wf_extended_funeral_app': {
+    id: 'wf_extended_funeral_app', name: 'Extended Funeral Application', category: 'New Business',
+    steps: [
+      { id:'s1', name:'Verify Contribution', slaDays:1, requiredDocs:[],                          autoAction:null },
+      { id:'s2', name:'QA',                  slaDays:2, requiredDocs:['QA Checklist'],            autoAction:null },
+      { id:'s3', name:'Update Program',      slaDays:1, requiredDocs:[],                          autoAction:'create_billing_task' },
+    ],
+  },
+
+  // ── CLAIMS ─────────────────────────────────────────────────────────────────
+  'wf_death_funeral': {
+    id: 'wf_death_funeral', name: 'Death – Funeral', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Verify Contribution',        slaDays:1, requiredDocs:[],                                            autoAction:null },
+      { id:'s2', name:'Obtain Relevant Documents',  slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order'], autoAction:null },
+      { id:'s3', name:'Complete Form',              slaDays:1, requiredDocs:['Completed Claim Form'],                      autoAction:null },
+      { id:'s4', name:'Submit',                     slaDays:1, requiredDocs:['Submission Confirmation'],                   autoAction:null },
+      { id:'s5', name:'Follow-Up',                  slaDays:5, requiredDocs:[],                                            autoAction:'create_followup_reminder' },
+      { id:'s6', name:'Feedback',                   slaDays:1, requiredDocs:[],                                            autoAction:null },
+    ],
+  },
+
+  'wf_death_accidental_funeral': {
+    id: 'wf_death_accidental_funeral', name: 'Death – Accidental Funeral', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Verify Contribution',       slaDays:1, requiredDocs:[],                                                         autoAction:null },
+      { id:'s2', name:'Obtain Relevant Documents', slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order','Police Report'], autoAction:null },
+      { id:'s3', name:'Complete Form',             slaDays:1, requiredDocs:['Completed Claim Form'],                                    autoAction:null },
+      { id:'s4', name:'Submit',                    slaDays:1, requiredDocs:['Submission Confirmation'],                                 autoAction:null },
+      { id:'s5', name:'Follow-Up',                 slaDays:5, requiredDocs:[],                                                         autoAction:'create_followup_reminder' },
+      { id:'s6', name:'Feedback',                  slaDays:1, requiredDocs:[],                                                         autoAction:null },
+    ],
+  },
+
+  'wf_death_gla': {
+    id: 'wf_death_gla', name: 'Death – GLA', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Benefit Statement',     slaDays:1, requiredDocs:['Benefit Statement'],              autoAction:null },
+      { id:'s2', name:'Nomination Form',       slaDays:2, requiredDocs:['Nomination Form'],                autoAction:null },
+      { id:'s3', name:'Send Claims Pack',      slaDays:1, requiredDocs:['Claims Pack'],                   autoAction:null },
+      { id:'s4', name:'Open Estate Account',   slaDays:5, requiredDocs:['Estate Account Confirmation'],   autoAction:null },
+      { id:'s5', name:'Trust Account (Minor)', slaDays:5, requiredDocs:[],                                autoAction:null },
+      { id:'s6', name:'Follow-Up',             slaDays:5, requiredDocs:[],                                autoAction:null },
+      { id:'s7', name:'Submit',                slaDays:1, requiredDocs:['Submission Confirmation'],        autoAction:null },
+      { id:'s8', name:'Follow-Up (Post)',      slaDays:5, requiredDocs:[],                                autoAction:'create_followup_reminder' },
+      { id:'s9', name:'Feedback',              slaDays:1, requiredDocs:[],                                autoAction:null },
+    ],
+  },
+
+  'wf_death_geb': {
+    id: 'wf_death_geb', name: 'Death – GEB', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
+      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
+      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
+      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+    ],
+  },
+
+  'wf_death_geb_review': {
+    id: 'wf_death_geb_review', name: 'Death – GEB Review', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
+      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
+      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
+      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+    ],
+  },
+
+  'wf_death_extended_funeral': {
+    id: 'wf_death_extended_funeral', name: 'Death – Extended Funeral', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Verify Contribution',       slaDays:1, requiredDocs:[],                                            autoAction:null },
+      { id:'s2', name:'Obtain Relevant Documents', slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order'], autoAction:null },
+      { id:'s3', name:'Complete Form',             slaDays:1, requiredDocs:['Completed Claim Form'],                      autoAction:null },
+      { id:'s4', name:'Submit',                    slaDays:1, requiredDocs:['Submission Confirmation'],                   autoAction:null },
+      { id:'s5', name:'Follow-Up',                 slaDays:5, requiredDocs:[],                                            autoAction:null },
+      { id:'s6', name:'Update Program',            slaDays:1, requiredDocs:[],                                            autoAction:'create_billing_task' },
+      { id:'s7', name:'Feedback',                  slaDays:1, requiredDocs:[],                                            autoAction:null },
+    ],
+  },
+
+  'wf_disability': {
+    id: 'wf_disability', name: 'Disability', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Verify Benefit',         slaDays:1, requiredDocs:['Benefit Verification'],         autoAction:null },
+      { id:'s2', name:'Claims Pack to ER & EE', slaDays:2, requiredDocs:['Claims Pack'],                 autoAction:null },
+      { id:'s3', name:'Follow-Up',              slaDays:5, requiredDocs:[],                               autoAction:null },
+      { id:'s4', name:'Submit',                 slaDays:1, requiredDocs:['Submission Confirmation'],      autoAction:null },
+      { id:'s5', name:'Follow-Up (Post)',        slaDays:5, requiredDocs:[],                               autoAction:'create_followup_reminder' },
+      { id:'s6', name:'Feedback to EE & ER',    slaDays:1, requiredDocs:[],                               autoAction:null },
+    ],
+  },
+
+  'wf_disability_review': {
+    id: 'wf_disability_review', name: 'Disability – Review', category: 'Claims',
+    steps: [
+      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
+      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
+      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
+      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
+      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+    ],
+  },
+
+  // ── EXITS ──────────────────────────────────────────────────────────────────
+  'wf_exit': {
+    id: 'wf_exit', name: 'Exit', category: 'Exits',
+    steps: [
+      { id:'s1', name:'Investment Statement',   slaDays:2, requiredDocs:['Investment Statement'],  autoAction:null },
+      { id:'s2', name:'Consultation',           slaDays:2, requiredDocs:[],                        autoAction:null },
+      { id:'s3', name:'Obtain Withdrawal Form', slaDays:2, requiredDocs:['Withdrawal Form'],       autoAction:null },
+      { id:'s4', name:'Submit',                 slaDays:1, requiredDocs:['Submission Confirmation'],autoAction:null },
+      { id:'s5', name:'Follow-Up',              slaDays:5, requiredDocs:[],                        autoAction:'create_followup_reminder' },
+      { id:'s6', name:'Feedback to EE & ER',    slaDays:1, requiredDocs:[],                        autoAction:'create_billing_task' },
+    ],
+  },
+
+  'wf_death_retirement': {
+    id: 'wf_death_retirement', name: 'Death – Retirement', category: 'Exits',
+    steps: [
+      { id:'s1',  name:'Investment Statement',  slaDays:2, requiredDocs:['Investment Statement'],          autoAction:null },
+      { id:'s2',  name:'Nomination Form',       slaDays:2, requiredDocs:['Nomination Form'],              autoAction:null },
+      { id:'s3',  name:'Send Claims Pack',      slaDays:1, requiredDocs:['Claims Pack'],                  autoAction:null },
+      { id:'s4',  name:'Open Estate Account',   slaDays:5, requiredDocs:['Estate Account Confirmation'],  autoAction:null },
+      { id:'s5',  name:'Trust Account (Minor)', slaDays:5, requiredDocs:[],                               autoAction:null },
+      { id:'s6',  name:'Trustee Resolution',    slaDays:3, requiredDocs:['Trustee Resolution Document'],  autoAction:null },
+      { id:'s7',  name:'Follow-Up',             slaDays:5, requiredDocs:[],                               autoAction:null },
+      { id:'s8',  name:'Submit',                slaDays:1, requiredDocs:['Submission Confirmation'],       autoAction:null },
+      { id:'s9',  name:'Follow-Up (Post)',      slaDays:5, requiredDocs:[],                               autoAction:'create_followup_reminder' },
+      { id:'s10', name:'Feedback',              slaDays:1, requiredDocs:[],                               autoAction:null },
+    ],
+  },
+
+  'wf_expiry': {
+    id: 'wf_expiry', name: 'Expiry', category: 'Exits',
+    steps: [
+      { id:'s1', name:'Check Expiry Age', slaDays:1, requiredDocs:[],        autoAction:null },
+      { id:'s2', name:'Notify Member',    slaDays:1, requiredDocs:[],        autoAction:'notify_member' },
+    ],
+  },
+
+  // ── FUND ADMINISTRATION ────────────────────────────────────────────────────
+  'wf_section_14': {
+    id: 'wf_section_14', name: 'Section 14', category: 'Fund Administration',
+    steps: [
+      { id:'s1', name:'Benefit Comparison',   slaDays:3, requiredDocs:['Benefit Comparison Document'], autoAction:null },
+      { id:'s2', name:'Member Communication', slaDays:2, requiredDocs:['Member Communication Letter'], autoAction:null },
+      { id:'s3', name:'FSCA Pack',            slaDays:3, requiredDocs:['FSCA Pack'],                  autoAction:null },
+      { id:'s4', name:'Submit',               slaDays:1, requiredDocs:['Submission Confirmation'],    autoAction:null },
+      { id:'s5', name:'Follow-Up',            slaDays:5, requiredDocs:[],                             autoAction:'create_followup_reminder' },
+      { id:'s6', name:'Statements',           slaDays:3, requiredDocs:['Statements'],                 autoAction:null },
+      { id:'s7', name:'Feedback',             slaDays:1, requiredDocs:[],                             autoAction:null },
+    ],
+  },
+
+  // ── MEDICAL AID ────────────────────────────────────────────────────────────
+  'wf_medical_query': {
+    id: 'wf_medical_query', name: 'Medical Aid Query', category: 'Medical Aid',
+    steps: [
+      { id:'s1', name:'Log Query',        slaDays:1, requiredDocs:[],          autoAction:null },
+      { id:'s2', name:'Action',           slaDays:2, requiredDocs:[],          autoAction:null },
+      { id:'s3', name:'Confirm to Member',slaDays:1, requiredDocs:[],          autoAction:'notify_member' },
+    ],
+  },
+
+  // ── QUERIES ────────────────────────────────────────────────────────────────
+  'wf_query': {
+    id: 'wf_query', name: 'Query', category: 'Queries',
+    steps: [
+      { id:'s1', name:'Log Query',        slaDays:1, requiredDocs:[],          autoAction:null },
+      { id:'s2', name:'Action',           slaDays:2, requiredDocs:[],          autoAction:null },
+      { id:'s3', name:'Confirm to Member',slaDays:1, requiredDocs:[],          autoAction:'notify_member' },
+    ],
+  },
+}
+
+// Map case type IDs to workflow template IDs
+export const CASE_TYPE_WORKFLOW_MAP = {
+  'ct_new_employee':          'wf_new',
+  'ct_exit_employee':         'wf_exit',
+  'ct_membership_amendment':  'wf_query',
+  'ct_amcu_funeral':          'wf_death_funeral',
+  'ct_extended_funeral':      'wf_death_extended_funeral',
+  'ct_beneficiary':           'wf_query',
+  'ct_benefit_statement':     'wf_query',
+  'ct_billing_query':         'wf_query',
+  'ct_employer_change':       'wf_query',
+  'ct_funeral_notification':  'wf_death_funeral',
+  'ct_general_query':         'wf_query',
+  'ct_underwriting':          'wf_underwriting',
+  'ct_internal_billing_review':'wf_query',
+  'ct_escalation':            'wf_query',
+}
+
+// Workflow step statuses
+export const STEP_STATUSES = ['Not Started','In Progress','Completed','Skipped','Waiting for Information']
+
+// Initialise a workflow instance for a new case
+export function initWorkflow(caseTypeId) {
+  const templateId = CASE_TYPE_WORKFLOW_MAP[caseTypeId]
+  const template   = WORKFLOW_TEMPLATES[templateId]
+  if (!template) return null
+  return {
+    templateId,
+    templateName: template.name,
+    steps: template.steps.map(s => ({
+      ...s,
+      status:      'Not Started',
+      assignedTo:  null,
+      startDate:   null,
+      completedAt: null,
+      notes:       '',
+      documents:   [],
+      dueDate:     null,
+    })),
+    startedAt:   new Date().toISOString(),
+    completedAt: null,
+  }
+}
+
+// Calculate workflow progress %
+export function workflowProgress(workflow) {
+  if (!workflow?.steps?.length) return 0
+  const done = workflow.steps.filter(s => s.status === 'Completed' || s.status === 'Skipped').length
+  return Math.round((done / workflow.steps.length) * 100)
+}
