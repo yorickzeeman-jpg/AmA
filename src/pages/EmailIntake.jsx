@@ -902,7 +902,7 @@ function ReviewPhase({ parseResult, uploadedFile, caseTypes, categories, employe
       ]
       onCreated({
         id:'c'+Date.now(), ref:caseRef, workspace:'employer',
-        caseTypeId:selCT, employerId:selEmp,
+        caseTypeId:selCT, caseTypeName:selCT, employerId:selEmp,
         status:'Submitted', priority, assignedTo,
         createdBy:currentUser.id, memberName,
         memberId:fields.idNumber||null, source:'email_import', sourceFile:uploadedFile?.name,

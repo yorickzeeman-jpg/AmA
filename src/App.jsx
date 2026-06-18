@@ -137,9 +137,7 @@ export default function App() {
       {openCase && (
         <CaseDetail
           c={openCase}
-          caseType={caseTypes.find(ct=>ct.id===openCase.caseTypeId)}
-          category={categories.find(cat=>cat.id===caseTypes.find(ct=>ct.id===openCase.caseTypeId)?.categoryId)}
-          employer={employers.find(e=>e.id===openCase.employerId)}
+          employers={employers}
           users={users}
           currentUser={user}
           onClose={()=>setOpenCase(null)}

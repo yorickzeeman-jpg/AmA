@@ -19,32 +19,32 @@ const LOCAL_USERS = [
 ]
 
 export async function signInWithName(name, password) {
-  // Try Supabase first
+  const nameTrimmed = name.trim()
+  const passTrimmed = password.trim()
+
+  // Always check local users first — fast and reliable
+  const local = LOCAL_USERS.find(u =>
+    u.name.toLowerCase() === nameTrimmed.toLowerCase() &&
+    u.password === passTrimmed &&
+    u.status === 'active'
+  )
+  if (local) return local
+
+  // Try Supabase as secondary source
   try {
     const { data, error } = await supabase
       .from('portal_users')
       .select('*')
-      .ilike('name', name.trim())
+      .ilike('name', nameTrimmed)
       .eq('status', 'active')
       .single()
 
-    if (!error && data) {
-      if (data.password !== password.trim()) throw new Error('Incorrect name or password.')
-      return data
-    }
+    if (!error && data && data.password === passTrimmed) return data
   } catch (e) {
-    if (e.message === 'Incorrect name or password.') throw e
-    // Supabase unreachable — fall through to local
+    // Supabase unreachable — already checked local above
   }
 
-  // Fallback: check local users
-  const local = LOCAL_USERS.find(u =>
-    u.name.toLowerCase() === name.trim().toLowerCase() &&
-    u.password === password.trim() &&
-    u.status === 'active'
-  )
-  if (!local) throw new Error('Incorrect name or password.')
-  return local
+  throw new Error('Incorrect name or password.')
 }
 
 export async function signIn(email, password) {

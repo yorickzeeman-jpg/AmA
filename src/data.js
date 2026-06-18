@@ -573,248 +573,294 @@ export const INITIAL_BILLING_TASKS = [
   },
 ]
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WORKFLOW TEMPLATES — sourced from Cases.xlsx
-// Each template has steps with SLA targets, required docs, and automation rules
-// ─────────────────────────────────────────────────────────────────────────────
 
+// ═════════════════════════════════════════════════════════════════════════════
+// WORKFLOW ENGINE — sourced directly from Cases.xlsx
+// Column D = Case Type name, Columns E–N = Step 1–10
+// These are the ACTUAL operational workflows used by Amadwala Employee Benefits
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Billing-trigger case types (final step → "Complete & Send to Billing")
+const BILLING_CASE_TYPES = new Set([
+  'Exit', 'New', 'Extended Funeral Application',
+  'Death - Retirement', 'Disability',
+])
+
+// Auto-action for final step
+function finalStepAction(caseTypeName) {
+  if (BILLING_CASE_TYPES.has(caseTypeName)) return 'create_billing_task'
+  if (caseTypeName === 'Underwriting') return 'notify_member_update_parent'
+  if (caseTypeName.startsWith('Death') || caseTypeName.startsWith('Disability')) return 'create_followup_reminder'
+  return null
+}
+
+// Build a step object
+function step(id, name, slaDays = 2, requiredDocs = [], autoAction = null) {
+  return { id: `s${id}`, name, slaDays, requiredDocs, autoAction }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MASTER WORKFLOW TEMPLATES — exact copy of Cases.xlsx
+// ─────────────────────────────────────────────────────────────────────────────
 export const WORKFLOW_TEMPLATES = {
 
-  // ── NEW BUSINESS ───────────────────────────────────────────────────────────
-  'wf_new': {
-    id: 'wf_new', name: 'New', category: 'New Business',
+  // ── SECTION 1: MAIN WORKFLOWS ─────────────────────────────────────────────
+
+  'Exit': {
+    name: 'Exit', category: 'Exits', billingTrigger: true,
     steps: [
-      { id:'s1', name:'Verify Benefit',          slaDays:1, requiredDocs:[],                          autoAction:null },
-      { id:'s2', name:'Consultation',             slaDays:2, requiredDocs:[],                          autoAction:null },
-      { id:'s3', name:'Medical Application',      slaDays:3, requiredDocs:['Medical Application Form'], autoAction:null },
-      { id:'s4', name:'Follow-Up',                slaDays:3, requiredDocs:[],                          autoAction:null },
-      { id:'s5', name:'Submit',                   slaDays:1, requiredDocs:['Completed Application'],   autoAction:null },
-      { id:'s6', name:'Follow-Up (Submission)',   slaDays:5, requiredDocs:[],                          autoAction:null },
-      { id:'s7', name:'Feedback to EE & ER',      slaDays:1, requiredDocs:[],                          autoAction:'create_billing_task' },
+      step(1, 'Investment statement',   2, ['Investment Statement']),
+      step(2, 'Consultation',           2),
+      step(3, 'Obtain withdrawal form', 2, ['Withdrawal Form']),
+      step(4, 'Submit',                 1, ['Submission Confirmation']),
+      step(5, 'Follow-up',              5),
+      step(6, 'Feedback to EE & ER',    1, [], 'create_billing_task'),
     ],
   },
 
-  'wf_underwriting': {
-    id: 'wf_underwriting', name: 'Underwriting', category: 'New Business',
+  'Death - Retirement': {
+    name: 'Death - Retirement', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Verify Letter',          slaDays:1, requiredDocs:['Underwriting Letter'],    autoAction:null },
-      { id:'s2', name:'Notify Member',           slaDays:1, requiredDocs:[],                         autoAction:'notify_member' },
-      { id:'s3', name:'Arrange Nurse Appointment',slaDays:3,requiredDocs:[],                         autoAction:null },
-      { id:'s4', name:'First Reminder',          slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s5', name:'Second Reminder',         slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s6', name:'Final Reminder',          slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s7', name:'Decision Letter',         slaDays:2, requiredDocs:['Decision Letter'],        autoAction:'notify_member_update_parent' },
+      step(1,  'Investment statement',  2, ['Investment Statement']),
+      step(2,  'Nomination form',       2, ['Nomination Form']),
+      step(3,  'Send claims pack',      1, ['Claims Pack']),
+      step(4,  'Open Estate Acc',       5, ['Estate Account Confirmation']),
+      step(5,  'Trust Acc - Minor',     5),
+      step(6,  'Trustee resolution',    3, ['Trustee Resolution']),
+      step(7,  'Follow-up',             5),
+      step(8,  'Submit',                1, ['Submission Confirmation']),
+      step(9,  'Follow-up',             5, [], 'create_followup_reminder'),
+      step(10, 'Feedback',              1),
     ],
   },
 
-  'wf_extended_funeral_app': {
-    id: 'wf_extended_funeral_app', name: 'Extended Funeral Application', category: 'New Business',
+  'Death - Funeral': {
+    name: 'Death - Funeral', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Verify Contribution', slaDays:1, requiredDocs:[],                          autoAction:null },
-      { id:'s2', name:'QA',                  slaDays:2, requiredDocs:['QA Checklist'],            autoAction:null },
-      { id:'s3', name:'Update Program',      slaDays:1, requiredDocs:[],                          autoAction:'create_billing_task' },
+      step(1, 'Verify contribution',       1),
+      step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order']),
+      step(3, 'Complete form',             1, ['Completed Claim Form']),
+      step(4, 'Submit',                    1, ['Submission Confirmation']),
+      step(5, 'Follow-up',                 5, [], 'create_followup_reminder'),
+      step(6, 'Feedback',                  1),
     ],
   },
 
-  // ── CLAIMS ─────────────────────────────────────────────────────────────────
-  'wf_death_funeral': {
-    id: 'wf_death_funeral', name: 'Death – Funeral', category: 'Claims',
+  'Death - Accidental Funeral': {
+    name: 'Death - Accidental Funeral', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Verify Contribution',        slaDays:1, requiredDocs:[],                                            autoAction:null },
-      { id:'s2', name:'Obtain Relevant Documents',  slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order'], autoAction:null },
-      { id:'s3', name:'Complete Form',              slaDays:1, requiredDocs:['Completed Claim Form'],                      autoAction:null },
-      { id:'s4', name:'Submit',                     slaDays:1, requiredDocs:['Submission Confirmation'],                   autoAction:null },
-      { id:'s5', name:'Follow-Up',                  slaDays:5, requiredDocs:[],                                            autoAction:'create_followup_reminder' },
-      { id:'s6', name:'Feedback',                   slaDays:1, requiredDocs:[],                                            autoAction:null },
+      step(1, 'Verify contribution',       1),
+      step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order', 'Police Report']),
+      step(3, 'Complete form',             1, ['Completed Claim Form']),
+      step(4, 'Submit',                    1, ['Submission Confirmation']),
+      step(5, 'Follow-up',                 5, [], 'create_followup_reminder'),
+      step(6, 'Feedback',                  1),
     ],
   },
 
-  'wf_death_accidental_funeral': {
-    id: 'wf_death_accidental_funeral', name: 'Death – Accidental Funeral', category: 'Claims',
+  'Death - GLA': {
+    name: 'Death - GLA', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Verify Contribution',       slaDays:1, requiredDocs:[],                                                         autoAction:null },
-      { id:'s2', name:'Obtain Relevant Documents', slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order','Police Report'], autoAction:null },
-      { id:'s3', name:'Complete Form',             slaDays:1, requiredDocs:['Completed Claim Form'],                                    autoAction:null },
-      { id:'s4', name:'Submit',                    slaDays:1, requiredDocs:['Submission Confirmation'],                                 autoAction:null },
-      { id:'s5', name:'Follow-Up',                 slaDays:5, requiredDocs:[],                                                         autoAction:'create_followup_reminder' },
-      { id:'s6', name:'Feedback',                  slaDays:1, requiredDocs:[],                                                         autoAction:null },
+      step(1, 'Benefit statement',   1, ['Benefit Statement']),
+      step(2, 'Nomination form',     2, ['Nomination Form']),
+      step(3, 'Send claims pack',    1, ['Claims Pack']),
+      step(4, 'Open Estate Acc',     5, ['Estate Account Confirmation']),
+      step(5, 'Trust Acc - Minor',   5),
+      step(6, 'Follow-up',           5),
+      step(7, 'Submit',              1, ['Submission Confirmation']),
+      step(8, 'Follow-up',           5, [], 'create_followup_reminder'),
+      step(9, 'Feedback',            1),
     ],
   },
 
-  'wf_death_gla': {
-    id: 'wf_death_gla', name: 'Death – GLA', category: 'Claims',
+  'Death - GEB': {
+    name: 'Death - GEB', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Benefit Statement',     slaDays:1, requiredDocs:['Benefit Statement'],              autoAction:null },
-      { id:'s2', name:'Nomination Form',       slaDays:2, requiredDocs:['Nomination Form'],                autoAction:null },
-      { id:'s3', name:'Send Claims Pack',      slaDays:1, requiredDocs:['Claims Pack'],                   autoAction:null },
-      { id:'s4', name:'Open Estate Account',   slaDays:5, requiredDocs:['Estate Account Confirmation'],   autoAction:null },
-      { id:'s5', name:'Trust Account (Minor)', slaDays:5, requiredDocs:[],                                autoAction:null },
-      { id:'s6', name:'Follow-Up',             slaDays:5, requiredDocs:[],                                autoAction:null },
-      { id:'s7', name:'Submit',                slaDays:1, requiredDocs:['Submission Confirmation'],        autoAction:null },
-      { id:'s8', name:'Follow-Up (Post)',      slaDays:5, requiredDocs:[],                                autoAction:'create_followup_reminder' },
-      { id:'s9', name:'Feedback',              slaDays:1, requiredDocs:[],                                autoAction:null },
+      step(1, 'Send claims pack', 1, ['Claims Pack']),
+      step(2, 'Follow-up',        5),
+      step(3, 'Submit',           1, ['Submission Confirmation']),
+      step(4, 'Follow-up',        5, [], 'create_followup_reminder'),
+      step(5, 'Feedback',         1),
     ],
   },
 
-  'wf_death_geb': {
-    id: 'wf_death_geb', name: 'Death – GEB', category: 'Claims',
+  'Death - GEB Review': {
+    name: 'Death - GEB Review', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
-      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
-      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
-      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+      step(1, 'Send claims pack', 1, ['Claims Pack']),
+      step(2, 'Follow-up',        5),
+      step(3, 'Submit',           1, ['Submission Confirmation']),
+      step(4, 'Follow-up',        5, [], 'create_followup_reminder'),
+      step(5, 'Feedback',         1),
     ],
   },
 
-  'wf_death_geb_review': {
-    id: 'wf_death_geb_review', name: 'Death – GEB Review', category: 'Claims',
+  'Death - Extended Funeral': {
+    name: 'Death - Extended Funeral', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
-      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
-      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
-      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+      step(1, 'Verify contribution',       1),
+      step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order']),
+      step(3, 'Complete form',             1, ['Completed Claim Form']),
+      step(4, 'Submit',                    1, ['Submission Confirmation']),
+      step(5, 'Follow-up',                 5),
+      step(6, 'Update program',            1, [], 'create_billing_task'),
+      step(7, 'Feedback',                  1),
     ],
   },
 
-  'wf_death_extended_funeral': {
-    id: 'wf_death_extended_funeral', name: 'Death – Extended Funeral', category: 'Claims',
+  'Disability': {
+    name: 'Disability', category: 'Claims', billingTrigger: true,
     steps: [
-      { id:'s1', name:'Verify Contribution',       slaDays:1, requiredDocs:[],                                            autoAction:null },
-      { id:'s2', name:'Obtain Relevant Documents', slaDays:3, requiredDocs:['Death Certificate','ID Copy','Burial Order'], autoAction:null },
-      { id:'s3', name:'Complete Form',             slaDays:1, requiredDocs:['Completed Claim Form'],                      autoAction:null },
-      { id:'s4', name:'Submit',                    slaDays:1, requiredDocs:['Submission Confirmation'],                   autoAction:null },
-      { id:'s5', name:'Follow-Up',                 slaDays:5, requiredDocs:[],                                            autoAction:null },
-      { id:'s6', name:'Update Program',            slaDays:1, requiredDocs:[],                                            autoAction:'create_billing_task' },
-      { id:'s7', name:'Feedback',                  slaDays:1, requiredDocs:[],                                            autoAction:null },
+      step(1, 'Verify benefit',         1, ['Benefit Verification']),
+      step(2, 'Claims pack to ER & EE', 2, ['Claims Pack']),
+      step(3, 'Follow-up',              5),
+      step(4, 'Submit',                 1, ['Submission Confirmation']),
+      step(5, 'Follow-up',              5, [], 'create_followup_reminder'),
+      step(6, 'Feedback to EE & ER',    1),
     ],
   },
 
-  'wf_disability': {
-    id: 'wf_disability', name: 'Disability', category: 'Claims',
+  'Disability - Review': {
+    name: 'Disability - Review', category: 'Claims', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Verify Benefit',         slaDays:1, requiredDocs:['Benefit Verification'],         autoAction:null },
-      { id:'s2', name:'Claims Pack to ER & EE', slaDays:2, requiredDocs:['Claims Pack'],                 autoAction:null },
-      { id:'s3', name:'Follow-Up',              slaDays:5, requiredDocs:[],                               autoAction:null },
-      { id:'s4', name:'Submit',                 slaDays:1, requiredDocs:['Submission Confirmation'],      autoAction:null },
-      { id:'s5', name:'Follow-Up (Post)',        slaDays:5, requiredDocs:[],                               autoAction:'create_followup_reminder' },
-      { id:'s6', name:'Feedback to EE & ER',    slaDays:1, requiredDocs:[],                               autoAction:null },
+      step(1, 'Send claims pack', 1, ['Claims Pack']),
+      step(2, 'Follow-up',        5),
+      step(3, 'Submit',           1, ['Submission Confirmation']),
+      step(4, 'Follow-up',        5, [], 'create_followup_reminder'),
+      step(5, 'Feedback',         1),
     ],
   },
 
-  'wf_disability_review': {
-    id: 'wf_disability_review', name: 'Disability – Review', category: 'Claims',
+  'Expiry': {
+    name: 'Expiry', category: 'Exits', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Send Claims Pack', slaDays:1, requiredDocs:['Claims Pack'],            autoAction:null },
-      { id:'s2', name:'Follow-Up',        slaDays:5, requiredDocs:[],                         autoAction:null },
-      { id:'s3', name:'Submit',           slaDays:1, requiredDocs:['Submission Confirmation'], autoAction:null },
-      { id:'s4', name:'Follow-Up (Post)', slaDays:5, requiredDocs:[],                         autoAction:'create_followup_reminder' },
-      { id:'s5', name:'Feedback',         slaDays:1, requiredDocs:[],                         autoAction:null },
+      step(1, 'Check expiry age', 1),
+      step(2, 'Notify member',    1, [], 'notify_member'),
     ],
   },
 
-  // ── EXITS ──────────────────────────────────────────────────────────────────
-  'wf_exit': {
-    id: 'wf_exit', name: 'Exit', category: 'Exits',
+  'New': {
+    name: 'New', category: 'New Business', billingTrigger: true,
     steps: [
-      { id:'s1', name:'Investment Statement',   slaDays:2, requiredDocs:['Investment Statement'],  autoAction:null },
-      { id:'s2', name:'Consultation',           slaDays:2, requiredDocs:[],                        autoAction:null },
-      { id:'s3', name:'Obtain Withdrawal Form', slaDays:2, requiredDocs:['Withdrawal Form'],       autoAction:null },
-      { id:'s4', name:'Submit',                 slaDays:1, requiredDocs:['Submission Confirmation'],autoAction:null },
-      { id:'s5', name:'Follow-Up',              slaDays:5, requiredDocs:[],                        autoAction:'create_followup_reminder' },
-      { id:'s6', name:'Feedback to EE & ER',    slaDays:1, requiredDocs:[],                        autoAction:'create_billing_task' },
+      step(1, 'Verify benefit',                              1),
+      step(2, 'Consultation',                                2),
+      step(3, 'Medical application',                         3, ['Medical Application Form']),
+      step(4, 'Follow-up',                                   3),
+      step(5, 'Submit',                                      1, ['Completed Application']),
+      step(6, 'Follow-up',                                   5),
+      step(7, 'Feedback to EE & ER and billing specialist',  1, [], 'create_billing_task'),
     ],
   },
 
-  'wf_death_retirement': {
-    id: 'wf_death_retirement', name: 'Death – Retirement', category: 'Exits',
+  'Underwriting': {
+    name: 'Underwriting', category: 'New Business', billingTrigger: false,
     steps: [
-      { id:'s1',  name:'Investment Statement',  slaDays:2, requiredDocs:['Investment Statement'],          autoAction:null },
-      { id:'s2',  name:'Nomination Form',       slaDays:2, requiredDocs:['Nomination Form'],              autoAction:null },
-      { id:'s3',  name:'Send Claims Pack',      slaDays:1, requiredDocs:['Claims Pack'],                  autoAction:null },
-      { id:'s4',  name:'Open Estate Account',   slaDays:5, requiredDocs:['Estate Account Confirmation'],  autoAction:null },
-      { id:'s5',  name:'Trust Account (Minor)', slaDays:5, requiredDocs:[],                               autoAction:null },
-      { id:'s6',  name:'Trustee Resolution',    slaDays:3, requiredDocs:['Trustee Resolution Document'],  autoAction:null },
-      { id:'s7',  name:'Follow-Up',             slaDays:5, requiredDocs:[],                               autoAction:null },
-      { id:'s8',  name:'Submit',                slaDays:1, requiredDocs:['Submission Confirmation'],       autoAction:null },
-      { id:'s9',  name:'Follow-Up (Post)',      slaDays:5, requiredDocs:[],                               autoAction:'create_followup_reminder' },
-      { id:'s10', name:'Feedback',              slaDays:1, requiredDocs:[],                               autoAction:null },
+      step(1, 'Verify letter',            1, ['Underwriting Letter']),
+      step(2, 'Notify member',            1, [], 'notify_member'),
+      step(3, 'Arrange nurse appointment',3),
+      step(4, 'First reminder',           5),
+      step(5, 'Second reminder',          5),
+      step(6, 'Final reminder',           5),
+      step(7, 'Decision letter',          2, ['Decision Letter'], 'notify_member_update_parent'),
     ],
   },
 
-  'wf_expiry': {
-    id: 'wf_expiry', name: 'Expiry', category: 'Exits',
+  'Extended Funeral Application': {
+    name: 'Extended Funeral Application', category: 'New Business', billingTrigger: true,
     steps: [
-      { id:'s1', name:'Check Expiry Age', slaDays:1, requiredDocs:[],        autoAction:null },
-      { id:'s2', name:'Notify Member',    slaDays:1, requiredDocs:[],        autoAction:'notify_member' },
+      step(1, 'Verify contribution', 1),
+      step(2, 'QA',                  2, ['QA Checklist']),
+      step(3, 'Update program',      1, [], 'create_billing_task'),
     ],
   },
 
-  // ── FUND ADMINISTRATION ────────────────────────────────────────────────────
-  'wf_section_14': {
-    id: 'wf_section_14', name: 'Section 14', category: 'Fund Administration',
+  'Section 14': {
+    name: 'Section 14', category: 'Fund Administration', billingTrigger: false,
     steps: [
-      { id:'s1', name:'Benefit Comparison',   slaDays:3, requiredDocs:['Benefit Comparison Document'], autoAction:null },
-      { id:'s2', name:'Member Communication', slaDays:2, requiredDocs:['Member Communication Letter'], autoAction:null },
-      { id:'s3', name:'FSCA Pack',            slaDays:3, requiredDocs:['FSCA Pack'],                  autoAction:null },
-      { id:'s4', name:'Submit',               slaDays:1, requiredDocs:['Submission Confirmation'],    autoAction:null },
-      { id:'s5', name:'Follow-Up',            slaDays:5, requiredDocs:[],                             autoAction:'create_followup_reminder' },
-      { id:'s6', name:'Statements',           slaDays:3, requiredDocs:['Statements'],                 autoAction:null },
-      { id:'s7', name:'Feedback',             slaDays:1, requiredDocs:[],                             autoAction:null },
+      step(1, 'Benefit comparison',   3, ['Benefit Comparison Document']),
+      step(2, 'Member communication', 2, ['Member Communication Letter']),
+      step(3, 'FSCA Pack',            3, ['FSCA Pack']),
+      step(4, 'Submit',               1, ['Submission Confirmation']),
+      step(5, 'Follow-up',            5, [], 'create_followup_reminder'),
+      step(6, 'Statements',           3, ['Statements']),
+      step(7, 'Feedback',             1),
     ],
   },
 
-  // ── MEDICAL AID ────────────────────────────────────────────────────────────
-  'wf_medical_query': {
-    id: 'wf_medical_query', name: 'Medical Aid Query', category: 'Medical Aid',
-    steps: [
-      { id:'s1', name:'Log Query',        slaDays:1, requiredDocs:[],          autoAction:null },
-      { id:'s2', name:'Action',           slaDays:2, requiredDocs:[],          autoAction:null },
-      { id:'s3', name:'Confirm to Member',slaDays:1, requiredDocs:[],          autoAction:'notify_member' },
-    ],
-  },
+  // ── SECTION 2: MEDICAL & QUERIES ──────────────────────────────────────────
+  // Note from spreadsheet: "Relevant steps loaded under Query Value, Action Value
+  // and Confirm Value. Ensure you remain on Action Value with all comments loaded
+  // until case is resolved because on Confirm Value you will merely state
+  // confirmation was sent to member."
+  // Standard 3-step query workflow applies to all medical and query types.
 
-  // ── QUERIES ────────────────────────────────────────────────────────────────
-  'wf_query': {
-    id: 'wf_query', name: 'Query', category: 'Queries',
-    steps: [
-      { id:'s1', name:'Log Query',        slaDays:1, requiredDocs:[],          autoAction:null },
-      { id:'s2', name:'Action',           slaDays:2, requiredDocs:[],          autoAction:null },
-      { id:'s3', name:'Confirm to Member',slaDays:1, requiredDocs:[],          autoAction:'notify_member' },
-    ],
-  },
+  'Medical - Add Vitality':        { name: 'Medical - Add Vitality',        category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Add Dependent':       { name: 'Medical - Add Dependent',       category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Cancellation':        { name: 'Medical - Cancellation',        category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Cancel Vitality':     { name: 'Medical - Cancel Vitality',     category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Claim Query':         { name: 'Medical - Claim Query',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Change Main Member':  { name: 'Medical - Change Main Member',  category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Plan Change':         { name: 'Medical - Plan Change',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Transfer':            { name: 'Medical - Transfer',            category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Removal of Dependent':{ name: 'Medical - Removal of Dependent',category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Underwriting':          { name: 'Query - Underwriting',          category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Homeloan':              { name: 'Query - Homeloan',              category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Divorce Order':         { name: 'Query - Divorce Order',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Benefit Statement':     { name: 'Query - Benefit Statement',     category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Cancel Extended Cover': { name: 'Query - Cancel Extended Cover', category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Contribution':          { name: 'Query - Contribution',          category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Nomination Form':       { name: 'Query - Nomination Form',       category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Query - Surname Change':        { name: 'Query - Surname Change',        category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
 }
 
-// Map case type IDs to workflow template IDs
-export const CASE_TYPE_WORKFLOW_MAP = {
-  'ct_new_employee':          'wf_new',
-  'ct_exit_employee':         'wf_exit',
-  'ct_membership_amendment':  'wf_query',
-  'ct_amcu_funeral':          'wf_death_funeral',
-  'ct_extended_funeral':      'wf_death_extended_funeral',
-  'ct_beneficiary':           'wf_query',
-  'ct_benefit_statement':     'wf_query',
-  'ct_billing_query':         'wf_query',
-  'ct_employer_change':       'wf_query',
-  'ct_funeral_notification':  'wf_death_funeral',
-  'ct_general_query':         'wf_query',
-  'ct_underwriting':          'wf_underwriting',
-  'ct_internal_billing_review':'wf_query',
-  'ct_escalation':            'wf_query',
+// Standard 3-step query workflow (per spreadsheet note)
+function querySteps() {
+  return [
+    step(1, 'Query Value',   1),
+    step(2, 'Action Value',  2),
+    step(3, 'Confirm Value', 1, [], 'notify_member'),
+  ]
 }
 
-// Workflow step statuses
-export const STEP_STATUSES = ['Not Started','In Progress','Completed','Skipped','Waiting for Information']
+// ─────────────────────────────────────────────────────────────────────────────
+// DERIVED LOOKUPS
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Initialise a workflow instance for a new case
-export function initWorkflow(caseTypeId) {
-  const templateId = CASE_TYPE_WORKFLOW_MAP[caseTypeId]
-  const template   = WORKFLOW_TEMPLATES[templateId]
+// All unique categories from templates
+export const WORKFLOW_CATEGORIES = [...new Set(
+  Object.values(WORKFLOW_TEMPLATES).map(t => t.category)
+)]
+
+// Case types grouped by category for the case creation picker
+export const CASE_TYPES_BY_CATEGORY = WORKFLOW_CATEGORIES.reduce((acc, cat) => {
+  acc[cat] = Object.values(WORKFLOW_TEMPLATES).filter(t => t.category === cat)
+  return acc
+}, {})
+
+export const STEP_STATUSES = [
+  'Not Started',
+  'In Progress',
+  'Waiting for Information',
+  'Completed',
+  'Skipped',
+]
+
+export const STEP_STATUS_CONFIG = {
+  'Not Started':             { icon:'○',  color:'#9ca3af', bg:'#f9fafb' },
+  'In Progress':             { icon:'⏳', color:'#1e5fd9', bg:'#eff6ff' },
+  'Waiting for Information': { icon:'⚠',  color:'#d97706', bg:'#fffbeb' },
+  'Completed':               { icon:'✓',  color:'#059669', bg:'#f0fdf4' },
+  'Skipped':                 { icon:'⏭', color:'#9ca3af', bg:'#f3f4f6' },
+}
+
+// Initialise a fresh workflow instance for a new case
+export function initWorkflow(caseTypeName) {
+  const template = WORKFLOW_TEMPLATES[caseTypeName]
   if (!template) return null
   return {
-    templateId,
     templateName: template.name,
+    category:     template.category,
+    billingTrigger: template.billingTrigger,
     steps: template.steps.map(s => ({
       ...s,
       status:      'Not Started',
@@ -823,16 +869,27 @@ export function initWorkflow(caseTypeId) {
       completedAt: null,
       notes:       '',
       documents:   [],
-      dueDate:     null,
     })),
     startedAt:   new Date().toISOString(),
     completedAt: null,
   }
 }
 
-// Calculate workflow progress %
+// Calculate % progress
 export function workflowProgress(workflow) {
   if (!workflow?.steps?.length) return 0
-  const done = workflow.steps.filter(s => s.status === 'Completed' || s.status === 'Skipped').length
+  const done = workflow.steps.filter(s =>
+    s.status === 'Completed' || s.status === 'Skipped'
+  ).length
   return Math.round((done / workflow.steps.length) * 100)
+}
+
+// Get current active step
+export function currentStep(workflow) {
+  if (!workflow?.steps) return null
+  return workflow.steps.find(s =>
+    s.status === 'Not Started' ||
+    s.status === 'In Progress' ||
+    s.status === 'Waiting for Information'
+  ) || null
 }
