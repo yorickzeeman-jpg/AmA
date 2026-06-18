@@ -131,6 +131,59 @@ export default function CaseDetail({ c, caseType, category, employer, users, cur
                 ))}
               </div>
 
+              {/* Workflow progress summary */}
+              {c.workflow && (() => {
+                const steps     = c.workflow.steps || []
+                const done      = steps.filter(s => s.status === 'Completed' || s.status === 'Skipped').length
+                const progress  = Math.round((done / steps.length) * 100)
+                const current   = steps.find(s => s.status === 'Not Started' || s.status === 'In Progress' || s.status === 'Waiting for Information')
+                const statusColors = { 'Completed':'#059669', 'Skipped':'#9ca3af', 'In Progress':'#1e5fd9', 'Waiting for Information':'#d97706', 'Not Started':'#d1d5db' }
+                const statusIcons  = { 'Completed':'✓', 'Skipped':'⏭', 'In Progress':'⏳', 'Waiting for Information':'⚠', 'Not Started':'○' }
+                return (
+                  <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:10, overflow:'hidden' }}>
+                    {/* Header */}
+                    <div style={{ padding:'12px 14px', borderBottom:`1px solid #f3f4f6`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                      <div>
+                        <div style={{ fontSize:12, fontWeight:700, color:T.text }}>{c.workflow.templateName}</div>
+                        {current && <div style={{ fontSize:11, color:T.orange, marginTop:1 }}>Current: {current.name}</div>}
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ textAlign:'right' }}>
+                          <div style={{ fontSize:18, fontWeight:800, color:progress===100?T.green:T.orange }}>{progress}%</div>
+                          <div style={{ fontSize:10, color:T.gray }}>{done}/{steps.length} steps</div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{ height:4, background:'#f3f4f6' }}>
+                      <div style={{ height:'100%', width:`${progress}%`, background:progress===100?T.green:T.orange, transition:'width .4s' }}/>
+                    </div>
+                    {/* Step checklist */}
+                    <div style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:5 }}>
+                      {steps.map((s, i) => {
+                        const clr = statusColors[s.status] || '#d1d5db'
+                        const ic  = statusIcons[s.status]  || '○'
+                        return (
+                          <div key={s.id} style={{ display:'flex', alignItems:'center', gap:9 }}>
+                            <span style={{ color:clr, fontSize:13, width:16, textAlign:'center', flexShrink:0 }}>{ic}</span>
+                            <span style={{ fontSize:12, color:s.status==='Completed'?T.green:s.status==='Skipped'?'#9ca3af':T.text, textDecoration:s.status==='Skipped'?'line-through':'none', fontWeight:s.status==='In Progress'?700:400 }}>
+                              {i+1}. {s.name}
+                            </span>
+                            {s.status==='In Progress' && <span style={{ fontSize:9, color:T.blue, background:'#eff6ff', padding:'1px 6px', borderRadius:10, fontWeight:700 }}>ACTIVE</span>}
+                            {s.status==='Waiting for Information' && <span style={{ fontSize:9, color:T.amber, background:'#fffbeb', padding:'1px 6px', borderRadius:10, fontWeight:700 }}>WAITING</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div style={{ padding:'8px 14px', borderTop:`1px solid #f9fafb`, display:'flex', justifyContent:'flex-end' }}>
+                      <button onClick={()=>setTab('Workflow')} style={{ fontSize:12, color:T.orange, fontWeight:600, background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+                        Manage workflow steps →
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div>
                 <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>Description</div>
                 <p style={{ fontSize:13, color:'#374151', lineHeight:1.7, margin:0 }}>{c.description}</p>

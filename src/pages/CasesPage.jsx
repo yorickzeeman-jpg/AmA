@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { T, CASE_STATUSES, PRIORITIES, calcSlaDate, allocateCase, BILLING_TRIGGER_CASE_TYPES, genRef, initWorkflow } from '../data.js'
+import { T, CASE_STATUSES, PRIORITIES, calcSlaDate, allocateCase, BILLING_TRIGGER_CASE_TYPES, genRef, initWorkflow, WORKFLOW_TEMPLATES, CASE_TYPE_WORKFLOW_MAP } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Card, Btn, Modal, Field, inputSt, selectSt, Empty } from '../ui.jsx'
 
 export default function CasesPage({ cases, caseTypes, categories, employers, users, currentUser, onOpenCase, onAddCase, onAddBillingTask, initialFilter, workspace='employer' }) {
@@ -416,18 +416,33 @@ function NewCaseModal({ caseTypes, categories, employers, users, currentUser, wo
             ← Back
           </button>
           <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-            {availableTypes.map(ct => (
-              <button key={ct.id}
-                onClick={() => { set('caseTypeId',ct.id); setStep(3) }}
-                style={{ padding:'12px 14px', borderRadius:9, border:`2px solid ${form.caseTypeId===ct.id?T.orange:T.border}`, background:form.caseTypeId===ct.id?T.orangeL:'#fff', textAlign:'left', cursor:'pointer', fontFamily:'inherit' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{ct.name}</div>
-                  <span style={{ fontSize:11, fontWeight:700, color:T.orange, background:T.orangeL, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap', marginLeft:8 }}>{ct.slaLabel}</span>
-                </div>
-                <div style={{ fontSize:11, color:T.gray, marginTop:3 }}>{ct.stages.length} stages · {ct.responsibleTeam}</div>
-                {ct.isBillingTrigger && <div style={{ fontSize:10, color:T.purple, marginTop:2, fontWeight:600 }}>↳ Triggers billing workflow on completion</div>}
-              </button>
-            ))}
+            {availableTypes.map(ct => {
+              const wfTemplate = WORKFLOW_TEMPLATES[CASE_TYPE_WORKFLOW_MAP[ct.id]]
+              const wfSteps    = wfTemplate?.steps || []
+              return (
+                <button key={ct.id}
+                  onClick={() => { set('caseTypeId',ct.id); setStep(3) }}
+                  style={{ padding:'12px 14px', borderRadius:9, border:`2px solid ${form.caseTypeId===ct.id?T.orange:T.border}`, background:form.caseTypeId===ct.id?T.orangeL:'#fff', textAlign:'left', cursor:'pointer', fontFamily:'inherit' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{ct.name}</div>
+                    <span style={{ fontSize:11, fontWeight:700, color:T.orange, background:T.orangeL, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap', marginLeft:8 }}>{ct.slaLabel}</span>
+                  </div>
+                  {/* Actual workflow steps */}
+                  {wfSteps.length > 0 ? (
+                    <div style={{ marginTop:7, display:'flex', flexWrap:'wrap', gap:4 }}>
+                      {wfSteps.map((s, i) => (
+                        <span key={s.id} style={{ fontSize:10, color:T.gray, background:'#f3f4f6', padding:'2px 8px', borderRadius:20, display:'flex', alignItems:'center', gap:3 }}>
+                          <span style={{ color:'#d1d5db', fontWeight:700 }}>{i+1}</span> {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:11, color:T.gray, marginTop:3 }}>{ct.responsibleTeam}</div>
+                  )}
+                  {ct.isBillingTrigger && <div style={{ fontSize:10, color:T.purple, marginTop:4, fontWeight:600 }}>↳ Triggers billing workflow on completion</div>}
+                </button>
+              )
+            })}
             {availableTypes.length===0 && <div style={{ textAlign:'center', color:T.gray, fontSize:13, padding:24 }}>No active case types in this category.</div>}
           </div>
         </div>
@@ -443,16 +458,38 @@ function NewCaseModal({ caseTypes, categories, employers, users, currentUser, wo
           {/* Workflow summary banner */}
           {selectedCT && (
             <div style={{ background:'#f0f7ff', borderRadius:9, padding:'12px 14px', marginBottom:16, border:'1px solid #bfdbfe' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:T.blue, marginBottom:6 }}>Workflow: {selectedCT.name}</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:selectedCT.isBillingTrigger?6:0 }}>
-                {[['SLA',selectedCT.slaLabel],['Stages',selectedCT.stages.length],['Team',selectedCT.responsibleTeam]].map(([k,v])=>(
+              <div style={{ fontSize:12, fontWeight:700, color:T.blue, marginBottom:8 }}>Workflow: {selectedCT.name}</div>
+              {/* SLA + Team row */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[['SLA',selectedCT.slaLabel],['Team',selectedCT.responsibleTeam]].map(([k,v])=>(
                   <div key={k}>
                     <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>{k}</div>
                     <div style={{ fontSize:12, fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
               </div>
-              {selectedCT.isBillingTrigger && <div style={{ fontSize:11, color:T.purple, fontWeight:600 }}>⚡ "Complete & Send to Billing" triggered on completion</div>}
+              {/* Actual workflow steps checklist */}
+              {(() => {
+                const wf = WORKFLOW_TEMPLATES[CASE_TYPE_WORKFLOW_MAP[selectedCT.id]]
+                const steps = wf?.steps || []
+                return steps.length > 0 ? (
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Workflow Steps</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                      {steps.map((s, i) => (
+                        <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:'#374151' }}>
+                          <span style={{ width:18, height:18, borderRadius:'50%', background:'#dbeafe', color:T.blue, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, flexShrink:0 }}>{i+1}</span>
+                          <span>{s.name}</span>
+                          {s.slaDays && <span style={{ fontSize:10, color:T.gray, marginLeft:'auto' }}>{s.slaDays}d SLA</span>}
+                          {s.requiredDocs?.length > 0 && <span style={{ fontSize:10, color:T.blue }}>📎</span>}
+                          {s.autoAction && <span style={{ fontSize:10, color:T.purple }}>⚡</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              })()}
+              {selectedCT.isBillingTrigger && <div style={{ fontSize:11, color:T.purple, fontWeight:600, marginTop:8 }}>⚡ "Complete & Send to Billing" triggered on completion</div>}
             </div>
           )}
 
