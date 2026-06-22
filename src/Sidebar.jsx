@@ -7,7 +7,7 @@ const INTERNAL_NAV = [
   { id:'cases',           label:'Employer Cases',   icon:'cases'      },
   { id:'internal_cases',  label:'Internal Cases',   icon:'audit'      },
   { id:'email_intake',    label:'Case from Email',  icon:'send'       },
-  { id:'billing',         label:'Billing',          icon:'sla'        },
+  { id:'billing',         label:'Billing',               icon:'sla'        },
   { id:'benefit_profiles',label:'Benefit Profiles',  icon:'employers'  },
   { id:'employers',       label:'Employers',         icon:'employers'  },
   { id:'reports',         label:'Reports',          icon:'reports'    },
