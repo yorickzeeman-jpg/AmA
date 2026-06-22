@@ -52,12 +52,28 @@ export default function App() {
 
   const overdueCt   = cases.filter(c => { const d=Math.ceil((new Date(c.slaDate)-new Date())/86400000); return d<0 && !['Completed','Closed','Billing Complete'].includes(c.status) }).length
   const escalatedCt = cases.filter(c => c.escalated).length
-  const pendingBilling = billingTasks.filter(bt => bt.status !== 'Billing Complete').length
+  const pendingBilling = billingTasks.filter(bt => bt.billingStatus === 'Pending Review').length
 
   function navigate(p, filter) { setPage(p); setPageFilter(filter||{}) }
   function updateCase(updated)  { setCases(prev=>prev.map(c=>c.id===updated.id?updated:c)); setOpenCase(updated) }
   function addCase(newCase)     { setCases(prev=>[newCase,...prev]) }
-  function addBillingTask(bt)   { setBillingTasks(prev=>[bt,...prev]) }
+  function addBillingTask(bt) {
+    // Enrich with Phase 4 billing engine fields
+    const enriched = {
+      ...bt,
+      billingStatus:   'Pending Review',
+      actionType:      bt.actionType || bt.transactionType || 'Membership Amendment',
+      currentPremium:  bt.currentPremium || null,
+      newPremium:      bt.newPremium || null,
+      approvedBy:      null,
+      approvedAt:      null,
+      declinedBy:      null,
+      declinedAt:      null,
+      notes:           bt.notes || [],
+      audit:           bt.audit || [{ time:new Date().toISOString(), user:'system', userName:'System', action:'Billing action created from case workflow', type:'create' }],
+    }
+    setBillingTasks(prev => [enriched, ...prev])
+  }
 
   const sharedProps = { cases, billingTasks, caseTypes, categories, employers, users, currentUser:user }
 
