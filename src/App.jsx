@@ -59,7 +59,10 @@ export default function App() {
   function navigate(p, filter) { setPage(p); setPageFilter(filter||{}) }
   function updateCase(updated)  { setCases(prev=>prev.map(c=>c.id===updated.id?updated:c)); setOpenCase(updated) }
   function addCase(newCase)     { setCases(prev=>[newCase,...prev]) }
-  function addBillingTask(bt) {
+  function addEmployer(emp, profile) {
+    setEmployers(prev => [...prev, emp])
+    if (profile) setBenefitProfiles(prev => ({...prev, [emp.id]: profile}))
+  }
     // Enrich with Phase 4 billing engine fields
     const enriched = {
       ...bt,
@@ -140,7 +143,7 @@ export default function App() {
               onCaseCreated={c => { addCase(c); navigate('cases') }}
             />
           )}
-          {page==='employers'  && <EmployersPage {...sharedProps} onNav={navigate}/>}
+          {page==='employers'  && <EmployersPage {...sharedProps} onNav={navigate} onAddEmployer={addEmployer}/>}
           {page==='benefit_profiles' && (isGM || role==='administrator') && (
             <EmployerBenefitProfiles
               employers={employers}
