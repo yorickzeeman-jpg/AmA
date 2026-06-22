@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T } from './data.js'
+import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile } from './supabase.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -24,13 +25,24 @@ export default function App() {
   const [pageFilter, setPageFilter]   = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cases, setCases]             = useState(INITIAL_CASES)
-  const [billingTasks, setBillingTasks]     = useState(INITIAL_BILLING_TASKS)
+  const [billingTasks, setBillingTasks]       = useState(INITIAL_BILLING_TASKS)
   const [benefitProfiles, setBenefitProfiles] = useState(INITIAL_BENEFIT_PROFILES)
   const [caseTypes, setCaseTypes]     = useState(INITIAL_CASE_TYPES)
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES)
   const [employers, setEmployers]     = useState(INITIAL_EMPLOYERS)
   const [users, setUsers]             = useState(INITIAL_USERS)
   const [openCase, setOpenCase]       = useState(null)
+
+  // Load persisted employers + benefit profiles from Supabase on login
+  useEffect(() => {
+    if (!user) return
+    async function load() {
+      const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
+      if (emps   && emps.length > 0)              setEmployers(emps)
+      if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
+    }
+    load()
+  }, [user?.id])
 
   if (!user) return (
     <>
@@ -62,6 +74,9 @@ export default function App() {
   function addEmployer(emp, profile) {
     setEmployers(prev => [...prev, emp])
     if (profile) setBenefitProfiles(prev => ({...prev, [emp.id]: profile}))
+    // Persist to Supabase
+    saveEmployer(emp)
+    if (profile) saveBenefitProfile(emp.id, profile)
   }
 
   function addBillingTask(bt) {
@@ -151,7 +166,10 @@ export default function App() {
               employers={employers}
               benefitProfiles={benefitProfiles}
               currentUser={user}
-              onUpdateProfile={(empId, profile) => setBenefitProfiles(prev => ({...prev, [empId]: profile}))}
+              onUpdateProfile={(empId, profile) => {
+                setBenefitProfiles(prev => ({...prev, [empId]: profile}))
+                saveBenefitProfile(empId, profile)
+              }}
             />
           )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}

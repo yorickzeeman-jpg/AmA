@@ -86,14 +86,7 @@ export const ALLOCATION_POOLS = {
 }
 
 // ─── EMPLOYERS ────────────────────────────────────────────────────────────────
-export const INITIAL_EMPLOYERS = [
-  { id:'e1', name:'Steelworks SA',         number:'EMP-001', industry:'Mining & Steel',  status:'active', members:4200,  contact:'Sandra Botha',       phone:'011 555 0100', email:'hr@steelworks.co.za',  portal:true  },
-  { id:'e2', name:'MineTrust Group',        number:'EMP-002', industry:'Mining',           status:'active', members:12500, contact:'Kevin Mokoena',       phone:'011 555 0200', email:'hr@minetrust.co.za',    portal:true  },
-  { id:'e3', name:'PetroLogix',             number:'EMP-003', industry:'Petroleum',         status:'active', members:3100,  contact:'Nompumelelo Sithole', phone:'011 555 0300', email:'hr@petrologix.co.za',   portal:false },
-  { id:'e4', name:'BuildRight Holdings',    number:'EMP-004', industry:'Construction',      status:'active', members:8700,  contact:'Pieter Swart',        phone:'011 555 0400', email:'hr@buildright.co.za',   portal:true  },
-  { id:'e5', name:'TransAfrica Logistics',  number:'EMP-005', industry:'Transport',         status:'review', members:5600,  contact:'Zanele Khumalo',      phone:'011 555 0500', email:'hr@transafrica.co.za',  portal:false },
-  { id:'e6', name:'AMCU',                   number:'EMP-006', industry:'Trade Union',       status:'active', members:71000, contact:'HR Department',       phone:'011 555 0600', email:'hr@amcu.co.za',         portal:true  },
-]
+export const INITIAL_EMPLOYERS = []
 
 // ─── CATEGORIES (grouping/reporting only) ────────────────────────────────────
 export const INITIAL_CATEGORIES = [
@@ -440,138 +433,12 @@ export function slaDiff(slaDate) {
 }
 
 // ─── INITIAL CASES ────────────────────────────────────────────────────────────
-export const INITIAL_CASES = [
-  {
-    id:'c1', ref:'AEB-001001', workspace:'employer',
-    caseTypeId:'ct_amcu_funeral', employerId:'e6',
-    status:'In Progress', priority:'Critical',
-    assignedTo:'u4', createdBy:'u10',
-    memberName:'Sipho Zulu', memberId:'7809125432088',
-    currentStage:1, stageHistory:['s1'],
-    created:daysAgo(1), slaDate:daysFromNow(0),
-    description:'Funeral claim following death of member on duty.',
-    billingTaskId:null,
-    notes:[{ user:'u4', date:daysAgo(0), text:'Death certificate received. Burial order still outstanding.' }],
-    documents:[{ name:'Claim_Form_Zulu.pdf', size:'0.8 MB', uploadedBy:'u10', date:daysAgo(1) }],
-    audit:[
-      { time:new Date(Date.now()-86400000).toISOString(), user:'u10', action:'Case AEB-001001 created', type:'create' },
-      { time:new Date(Date.now()-84600000).toISOString(), user:'system', action:'Auto-assigned to Sesi Phiri', type:'assign' },
-      { time:new Date(Date.now()-43200000).toISOString(), user:'u4', action:'Stage advanced to "Documents Verified"', type:'stage' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u4', from:daysAgo(1) }],
-  },
-  {
-    id:'c2', ref:'AEB-001002', workspace:'employer',
-    caseTypeId:'ct_new_employee', employerId:'e1',
-    status:'In Progress', priority:'Medium',
-    assignedTo:'u2', createdBy:'u10',
-    memberName:'Batch: 12 New Employees', memberId:null,
-    currentStage:1, stageHistory:['s1'],
-    created:daysAgo(1), slaDate:daysFromNow(1),
-    description:'New employee batch from Steelworks SA — Vereeniging plant.',
-    billingTaskId:null,
-    notes:[], documents:[{ name:'Enrolment_Batch_SW.zip', size:'3.2 MB', uploadedBy:'u10', date:daysAgo(1) }],
-    audit:[
-      { time:new Date(Date.now()-86400000).toISOString(), user:'u10', action:'Case AEB-001002 created', type:'create' },
-      { time:new Date(Date.now()-85000000).toISOString(), user:'system', action:'Auto-assigned to Nokulunga Nyundu (Round Robin)', type:'assign' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u2', from:daysAgo(1) }],
-  },
-  {
-    id:'c3', ref:'AEB-001003', workspace:'employer',
-    caseTypeId:'ct_exit_employee', employerId:'e5',
-    status:'Awaiting Information', priority:'Medium',
-    assignedTo:'u6', createdBy:'u10',
-    memberName:'Batch: 32 Exits (Section 189)', memberId:null,
-    currentStage:1, stageHistory:['s1'],
-    created:daysAgo(3), slaDate:daysFromNow(2),
-    description:'Section 189 retrenchment — TransAfrica Logistics.',
-    billingTaskId:null,
-    notes:[{ user:'u6', date:daysAgo(1), text:'Termination letters outstanding for 8 members.' }],
-    documents:[{ name:'Exit_List_TA.xlsx', size:'1.1 MB', uploadedBy:'u10', date:daysAgo(3) }],
-    audit:[
-      { time:new Date(Date.now()-259200000).toISOString(), user:'u10', action:'Case AEB-001003 created', type:'create' },
-      { time:new Date(Date.now()-259000000).toISOString(), user:'system', action:'Auto-assigned to Mahlatse Manyathi (Round Robin)', type:'assign' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u6', from:daysAgo(3) }],
-  },
-  {
-    id:'c4', ref:'AEB-001004', workspace:'employer',
-    caseTypeId:'ct_beneficiary', employerId:'e2',
-    status:'Submitted', priority:'Low',
-    assignedTo:'u4', createdBy:'u11',
-    memberName:'Thabo Dlamini', memberId:'8802143219087',
-    currentStage:0, stageHistory:[],
-    created:daysAgo(0), slaDate:daysFromNow(2),
-    description:'Beneficiary nomination update — new spouse added.',
-    billingTaskId:null,
-    notes:[], documents:[{ name:'Beneficiary_Form_Dlamini.pdf', size:'0.4 MB', uploadedBy:'u11', date:daysAgo(0) }],
-    audit:[
-      { time:new Date().toISOString(), user:'u11', action:'Case AEB-001004 created', type:'create' },
-      { time:new Date().toISOString(), user:'system', action:'Auto-assigned to Sesi Phiri (Direct)', type:'assign' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u4', from:daysAgo(0) }],
-  },
-  {
-    id:'c5', ref:'AEB-001005', workspace:'employer',
-    caseTypeId:'ct_new_employee', employerId:'e4',
-    status:'Sent to Billing', priority:'Medium',
-    assignedTo:'u5', createdBy:'u12',
-    memberName:'Pieter Joubert', memberId:'9001015432083',
-    currentStage:3, stageHistory:['s1','s2','s3'],
-    created:daysAgo(4), slaDate:daysFromNow(0),
-    description:'New employee — BuildRight Holdings, site supervisor role.',
-    billingTaskId:'bt1',
-    notes:[], documents:[{ name:'Enrolment_Joubert.pdf', size:'0.9 MB', uploadedBy:'u12', date:daysAgo(4) }],
-    audit:[
-      { time:new Date(Date.now()-345600000).toISOString(), user:'u12', action:'Case AEB-001005 created', type:'create' },
-      { time:new Date(Date.now()-300000000).toISOString(), user:'u3', action:'Stage advanced to "Documents Verified"', type:'stage' },
-      { time:new Date(Date.now()-200000000).toISOString(), user:'u3', action:'Stage advanced to "Member Captured"', type:'stage' },
-      { time:new Date(Date.now()-100000000).toISOString(), user:'u3', action:'Complete & Send to Billing — Billing Task bt1 created', type:'billing' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u3', from:daysAgo(4) },{ user:'u5', from:daysAgo(1) }],
-  },
-  // Internal case
-  {
-    id:'c6', ref:'AEB-INT001', workspace:'internal',
-    caseTypeId:'ct_underwriting', employerId:'e2',
-    status:'In Progress', priority:'High',
-    assignedTo:'u1', createdBy:'u2',
-    memberName:'Johannes Pretorius', memberId:'6507124512083',
-    currentStage:1, stageHistory:['s1'],
-    created:daysAgo(2), slaDate:daysFromNow(7),
-    description:'Medical underwriting required — member over 65 joining MineTrust Group.',
-    billingTaskId:null, linkedCaseId:null,
-    notes:[{ user:'u1', date:daysAgo(1), text:'Medical report received. Review in progress.' }],
-    documents:[{ name:'Medical_Report_Pretorius.pdf', size:'2.1 MB', uploadedBy:'u2', date:daysAgo(2) }],
-    audit:[
-      { time:new Date(Date.now()-172800000).toISOString(), user:'u2', action:'Internal Case AEB-INT001 created', type:'create' },
-      { time:new Date(Date.now()-172000000).toISOString(), user:'system', action:'Auto-assigned to Leandre van der Merwe (Direct)', type:'assign' },
-    ],
-    escalated:false, ownerHistory:[{ user:'u1', from:daysAgo(2) }],
-  },
-]
+export const INITIAL_CASES = []
+
 
 // ─── INITIAL BILLING TASKS ─────────────────────────────────────────────────────
-export const INITIAL_BILLING_TASKS = [
-  {
-    id:'bt1', ref:'BT-001001',
-    linkedCaseId:'c5', linkedCaseRef:'AEB-001005',
-    employerId:'e4', memberName:'Pieter Joubert',
-    transactionType:'New Employee',
-    effectiveDate: daysFromNow(-4),
-    assignedTo:'u5',
-    status:'Billing In Progress',
-    priority:'Medium',
-    createdBy:'u3',
-    created:daysAgo(1),
-    notes:[],
-    audit:[
-      { time:new Date(Date.now()-86400000).toISOString(), user:'u3', action:'Billing Task BT-001001 created from AEB-001005', type:'create' },
-      { time:new Date(Date.now()-86000000).toISOString(), user:'system', action:'Assigned to Daleen Taute (Billing Pool)', type:'assign' },
-    ],
-  },
-]
+export const INITIAL_BILLING_TASKS = []
+
 
 
 // ═════════════════════════════════════════════════════════════════════════════

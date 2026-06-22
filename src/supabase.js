@@ -192,3 +192,53 @@ export async function fetchStaff() {
   if (error) throw error
   return data
 }
+
+// ── EMPLOYERS ─────────────────────────────────────────────────
+export async function fetchEmployers() {
+  const { data, error } = await supabase
+    .from('employers')
+    .select('*')
+    .order('name')
+  if (error) { console.warn('[Supabase] fetchEmployers:', error.message); return null }
+  return data
+}
+
+export async function saveEmployer(emp) {
+  const { error } = await supabase
+    .from('employers')
+    .upsert({
+      id:         emp.id,
+      name:       emp.name,
+      number:     emp.number,
+      industry:   emp.industry,
+      status:     emp.status,
+      members:    emp.members || 0,
+      contact:    emp.contact,
+      phone:      emp.phone,
+      email:      emp.email,
+      portal:     emp.portal || false,
+      consultant: emp.consultant || null,
+    })
+  if (error) console.warn('[Supabase] saveEmployer:', error.message)
+  return !error
+}
+
+// ── BENEFIT PROFILES ──────────────────────────────────────────
+export async function fetchBenefitProfiles() {
+  const { data, error } = await supabase
+    .from('benefit_profiles')
+    .select('employer_id, profile_data')
+  if (error) { console.warn('[Supabase] fetchBenefitProfiles:', error.message); return null }
+  // Convert array to object keyed by employer_id
+  const map = {}
+  ;(data || []).forEach(row => { map[row.employer_id] = row.profile_data })
+  return map
+}
+
+export async function saveBenefitProfile(employerId, profile) {
+  const { error } = await supabase
+    .from('benefit_profiles')
+    .upsert({ employer_id: employerId, profile_data: profile, updated_at: new Date().toISOString() })
+  if (error) console.warn('[Supabase] saveBenefitProfile:', error.message)
+  return !error
+}
