@@ -893,3 +893,147 @@ export function currentStep(workflow) {
     s.status === 'Waiting for Information'
   ) || null
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EMPLOYER BENEFIT PROFILES
+// Source of truth for all billing calculations per employer.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export const INITIAL_BENEFIT_PROFILES = {
+
+  'e1': {
+    employerId: 'e1',
+    employerName: 'Steelworks SA',
+    payrollContact: 'Sandra Botha',
+    effectiveDate: '2024-01-01',
+    retirementAge: 65,
+    billingMethod: 'Arrears',
+    billingDueDate: '14th',
+    paymentMethod: 'Debit Order',
+
+    retirementFund: {
+      name: 'Steelworks Provident Fund',
+      fundCode: '',
+      administrator: 'Alexander Forbes',
+      normalRetirementAge: 65,
+      administrationCost: 50.28,
+      contributionCategories: [
+        { category: 'Category 1', employer: 5, employee: 0 },
+        { category: 'Category 2', employer: 5, employee: 2.5 },
+        { category: 'Category 3', employer: 5, employee: 5 },
+        { category: 'Category 4', employer: 5, employee: 7 },
+      ],
+    },
+
+    groupLife: {
+      administrator: 'Discovery',
+      schemeNumber: '',
+      benefit: '3 × Annual Salary',
+      rate: 1.46,
+      educationBenefit: true,
+      globalEducationProtector: 'Unlimited',
+      mortgageProtector: true,
+      freeCoverLimit: 2000000,
+      benefitExpiryAge: 65,
+    },
+
+    disability: {
+      rate: 1.42,
+      waitingPeriodMonths: 3,
+      escalationPercent: 5,
+      benefitExpiryAge: 65,
+      contributionProtectorMonths: 12,
+    },
+
+    medicalAid: {
+      scheme: 'Discovery Health',
+      schemeNumber: '',
+      billingMethod: 'Arrears',
+      billingDueDate: '14th',
+      paymentMethod: 'Debit Order',
+      compulsory: true,
+    },
+
+    funeralCover: null,
+  },
+
+  'e6': {
+    employerId: 'e6',
+    employerName: 'AMCU',
+    payrollContact: 'HR Department',
+    effectiveDate: '2024-01-01',
+    retirementAge: 65,
+    billingMethod: 'Arrears',
+    billingDueDate: '14th',
+    paymentMethod: 'Debit Order',
+
+    retirementFund: {
+      name: 'Igula Umbrella Provident Fund',
+      fundCode: '24193-44733',
+      administrator: 'Alexander Forbes',
+      normalRetirementAge: 65,
+      administrationCost: 50.28,
+      contributionCategories: [
+        { category: 'Category 1', employer: 5, employee: 0 },
+        { category: 'Category 2', employer: 5, employee: 2.5 },
+        { category: 'Category 3', employer: 5, employee: 5 },
+        { category: 'Category 4', employer: 5, employee: 7 },
+      ],
+    },
+
+    groupLife: {
+      administrator: 'Discovery',
+      schemeNumber: '6600009630',
+      benefit: '3 × Annual Salary',
+      rate: 1.46,
+      educationBenefit: true,
+      globalEducationProtector: 'Unlimited',
+      mortgageProtector: true,
+      freeCoverLimit: 2000000,
+      benefitExpiryAge: 65,
+    },
+
+    disability: {
+      rate: 1.42,
+      waitingPeriodMonths: 3,
+      escalationPercent: 5,
+      benefitExpiryAge: 65,
+      contributionProtectorMonths: 12,
+    },
+
+    medicalAid: {
+      scheme: 'Discovery Health',
+      schemeNumber: '4342893',
+      billingMethod: 'Arrears',
+      billingDueDate: '14th',
+      paymentMethod: 'Debit Order',
+      compulsory: true,
+    },
+
+    funeralCover: {
+      scheme: 'AMCU Family Funeral Plan',
+      administrator: 'Amadwala Employee Benefits',
+      memberPremium: 57,
+      extendedFamilyAvailable: true,
+    },
+  },
+}
+
+// Empty profile template for new employers
+export function emptyBenefitProfile(employerId, employerName) {
+  return {
+    employerId,
+    employerName,
+    payrollContact: '',
+    effectiveDate: new Date().toISOString().split('T')[0],
+    retirementAge: 65,
+    billingMethod: 'Arrears',
+    billingDueDate: '14th',
+    paymentMethod: 'Debit Order',
+    retirementFund: { name:'', fundCode:'', administrator:'', normalRetirementAge:65, administrationCost:0, contributionCategories:[] },
+    groupLife:      { administrator:'', schemeNumber:'', benefit:'', rate:0, educationBenefit:false, globalEducationProtector:'', mortgageProtector:false, freeCoverLimit:0, benefitExpiryAge:65 },
+    disability:     { rate:0, waitingPeriodMonths:3, escalationPercent:5, benefitExpiryAge:65, contributionProtectorMonths:12 },
+    medicalAid:     { scheme:'', schemeNumber:'', billingMethod:'Arrears', billingDueDate:'14th', paymentMethod:'Debit Order', compulsory:false },
+    funeralCover:   null,
+  }
+}

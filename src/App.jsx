@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, T } from './data.js'
+import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T } from './data.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -15,6 +15,7 @@ import CaseTypeConfig from './pages/admin/CaseTypeConfig.jsx'
 import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
+import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
 import PWAInstallPrompt from './PWAInstallPrompt.jsx'
 
 export default function App() {
@@ -23,7 +24,8 @@ export default function App() {
   const [pageFilter, setPageFilter]   = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cases, setCases]             = useState(INITIAL_CASES)
-  const [billingTasks, setBillingTasks] = useState(INITIAL_BILLING_TASKS)
+  const [billingTasks, setBillingTasks]     = useState(INITIAL_BILLING_TASKS)
+  const [benefitProfiles, setBenefitProfiles] = useState(INITIAL_BENEFIT_PROFILES)
   const [caseTypes, setCaseTypes]     = useState(INITIAL_CASE_TYPES)
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES)
   const [employers, setEmployers]     = useState(INITIAL_EMPLOYERS)
@@ -139,6 +141,14 @@ export default function App() {
             />
           )}
           {page==='employers'  && <EmployersPage {...sharedProps} onNav={navigate}/>}
+          {page==='benefit_profiles' && (isGM || role==='administrator') && (
+            <EmployerBenefitProfiles
+              employers={employers}
+              benefitProfiles={benefitProfiles}
+              currentUser={user}
+              onUpdateProfile={(empId, profile) => setBenefitProfiles(prev => ({...prev, [empId]: profile}))}
+            />
+          )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}
           {/* Admin */}
           {page==='admin_users'      && <UserManagement     users={users} onUpdateUsers={setUsers}/>}

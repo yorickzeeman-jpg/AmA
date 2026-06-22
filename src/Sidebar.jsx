@@ -7,8 +7,9 @@ const INTERNAL_NAV = [
   { id:'cases',           label:'Employer Cases',   icon:'cases'      },
   { id:'internal_cases',  label:'Internal Cases',   icon:'audit'      },
   { id:'email_intake',    label:'Case from Email',  icon:'send'       },
-  { id:'billing',         label:'Billing Workbench',icon:'sla'        },
-  { id:'employers',       label:'Employers',        icon:'employers'  },
+  { id:'billing',         label:'Billing',          icon:'sla'        },
+  { id:'benefit_profiles',label:'Benefit Profiles',  icon:'employers'  },
+  { id:'employers',       label:'Employers',         icon:'employers'  },
   { id:'reports',         label:'Reports',          icon:'reports'    },
 ]
 const EMPLOYER_NAV = [
@@ -38,6 +39,7 @@ export default function Sidebar({ user, page, onNav, onLogout, open }) {
   const canEmailIntake = ['general_manager','administrator'].includes(user.role)
   const nav        = isEmployer ? EMPLOYER_NAV : INTERNAL_NAV.filter(item => {
     if (item.id === 'billing' && !isGM && !isBilling) return false
+    if (item.id === 'benefit_profiles' && !isGM && user.role !== 'administrator') return false
     if (item.id === 'internal_cases' && isEmployer) return false
     if (item.id === 'email_intake' && !canEmailIntake) return false
     return true
