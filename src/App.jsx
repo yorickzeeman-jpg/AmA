@@ -17,6 +17,7 @@ import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
+import MembershipRegister from './pages/MembershipRegister.jsx'
 import PWAInstallPrompt from './PWAInstallPrompt.jsx'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
   const [employers, setEmployers]     = useState(INITIAL_EMPLOYERS)
   const [users, setUsers]             = useState(INITIAL_USERS)
   const [openCase, setOpenCase]       = useState(null)
+  const [members, setMembers]         = useState([])
 
   // Load persisted employers + benefit profiles from Supabase on login
   useEffect(() => {
@@ -170,6 +172,15 @@ export default function App() {
                 setBenefitProfiles(prev => ({...prev, [empId]: profile}))
                 saveBenefitProfile(empId, profile)
               }}
+            />
+          )}
+          {page==='membership_register' && (
+            <MembershipRegister
+              employers={employers}
+              members={members}
+              currentUser={user}
+              onLoadMembers={newMembers => setMembers(prev => [...prev.filter(m => !newMembers.find(n=>n.id===m.id)), ...newMembers])}
+              onUpdateMember={updated => setMembers(prev => prev.map(m => m.id===updated.id ? updated : m))}
             />
           )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { T, emptyBenefitProfile } from '../data.js'
 import { Icon, Empty, Card, Btn, Modal, inputSt, selectSt } from '../ui.jsx'
 
@@ -253,7 +253,7 @@ export default function EmployersPage({ employers, users, cases, currentUser, on
 // ADD EMPLOYER MODAL — Upload or Manual
 // ═════════════════════════════════════════════════════════════════════════════
 function AddEmployerModal({ onClose, onAdd, existingCount }) {
-  const [mode, setMode]           = useState(null)  // null | 'upload' | 'manual'
+  const [mode, setMode]           = useState(null)  // null | 'upload' | 'manual' | 'bulk'
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUpDone]   = useState(false)
   const [parseResult, setResult]  = useState(null)
@@ -352,37 +352,49 @@ function AddEmployerModal({ onClose, onAdd, existingCount }) {
       {!mode && (
         <div>
           <p style={{ fontSize:13, color:T.gray, marginBottom:20, lineHeight:1.6 }}>
-            How would you like to add this employer? Upload their info pack and we'll extract the details automatically, or fill in the form manually.
+            How would you like to add this employer?
           </p>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
             <button onClick={() => setMode('upload')}
-              style={{ padding:'28px 20px', borderRadius:12, border:`2px solid ${T.border}`, background:'#fff', cursor:'pointer', textAlign:'center', fontFamily:'inherit', transition:'all .15s' }}
+              style={{ padding:'24px 16px', borderRadius:12, border:`2px solid ${T.border}`, background:'#fff', cursor:'pointer', textAlign:'center', fontFamily:'inherit', transition:'all .15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor=T.orange; e.currentTarget.style.background=T.orangeL }}
               onMouseLeave={e => { e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background='#fff' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>📄</div>
-              <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:6 }}>Upload Info Pack</div>
-              <div style={{ fontSize:12, color:T.gray, lineHeight:1.5 }}>
-                Upload the employer's benefit summary PDF. We'll extract the employer name, fund details, GLA, PHI, and medical aid automatically.
-              </div>
-              <div style={{ marginTop:12, display:'inline-flex', gap:6 }}>
-                {['.PDF','.TXT'].map(ext => (
-                  <span key={ext} style={{ fontSize:10, fontWeight:700, color:'#dc2626', background:'#fff1f2', padding:'2px 8px', borderRadius:6 }}>{ext}</span>
-                ))}
-              </div>
+              <div style={{ fontSize:36, marginBottom:10 }}>📄</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:4 }}>Upload Info Pack</div>
+              <div style={{ fontSize:11, color:T.gray, lineHeight:1.5 }}>One employer — extract automatically</div>
+            </button>
+
+            <button onClick={() => setMode('bulk')}
+              style={{ padding:'24px 16px', borderRadius:12, border:`2px solid ${T.border}`, background:'#fff', cursor:'pointer', textAlign:'center', fontFamily:'inherit', transition:'all .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor=T.green; e.currentTarget.style.background='#f0fdf4' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background='#fff' }}>
+              <div style={{ fontSize:36, marginBottom:10 }}>📦</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:4 }}>Bulk Upload</div>
+              <div style={{ fontSize:11, color:T.gray, lineHeight:1.5 }}>Multiple info packs — process all at once</div>
             </button>
 
             <button onClick={() => { setMode('manual'); setForm(f => ({...f, number:`EMP-${String(existingCount+1).padStart(3,'0')}`})) }}
-              style={{ padding:'28px 20px', borderRadius:12, border:`2px solid ${T.border}`, background:'#fff', cursor:'pointer', textAlign:'center', fontFamily:'inherit', transition:'all .15s' }}
+              style={{ padding:'24px 16px', borderRadius:12, border:`2px solid ${T.border}`, background:'#fff', cursor:'pointer', textAlign:'center', fontFamily:'inherit', transition:'all .15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor=T.blue; e.currentTarget.style.background='#f0f7ff' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background='#fff' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>✏️</div>
-              <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:6 }}>Enter Manually</div>
-              <div style={{ fontSize:12, color:T.gray, lineHeight:1.5 }}>
-                Fill in the employer details by hand. You can add the full benefit profile afterwards from the Benefit Profiles section.
-              </div>
+              <div style={{ fontSize:36, marginBottom:10 }}>✏️</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:4 }}>Enter Manually</div>
+              <div style={{ fontSize:11, color:T.gray, lineHeight:1.5 }}>Fill in the form by hand</div>
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── BULK MODE ── */}
+      {mode === 'bulk' && (
+        <BulkUploadFlow
+          existingCount={existingCount}
+          onBack={() => setMode(null)}
+          onSaveAll={(employers, profiles) => {
+            employers.forEach((emp, i) => onAdd(emp, profiles[i]))
+            onClose()
+          }}
+        />
       )}
 
       {/* ── UPLOAD MODE ── */}
@@ -578,6 +590,170 @@ function EmployerForm({ form, set }) {
           <div style={{ width:16, height:16, borderRadius:'50%', background:'#fff', position:'absolute', top:2, left:form.portal?18:2, transition:'left .15s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
         </div>
         <span style={{ fontSize:12, color:T.text, fontWeight:500 }}>Employer has portal access</span>
+      </div>
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BULK UPLOAD FLOW
+// Drop multiple PDFs → process in parallel → review → save all
+// ═════════════════════════════════════════════════════════════════════════════
+function BulkUploadFlow({ existingCount, onBack, onSaveAll }) {
+  const [items, setItems]     = useState([])  // { file, status, name, result, error }
+  const [processing, setProc] = useState(false)
+  const [done, setDone]       = useState(false)
+  const inputRef              = useRef(null)
+
+  function addFiles(files) {
+    const newItems = Array.from(files)
+      .filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf') || f.name.endsWith('.txt'))
+      .map(f => ({ id: Math.random().toString(36).slice(2), file: f, status: 'queued', name: f.name, result: null, error: null }))
+    setItems(prev => [...prev, ...newItems])
+  }
+
+  async function processAll() {
+    if (items.length === 0) return
+    setProc(true)
+
+    // Process all in parallel
+    const updated = await Promise.all(items.map(async item => {
+      if (item.status === 'done') return item
+      try {
+        // Update status to processing
+        setItems(prev => prev.map(x => x.id === item.id ? {...x, status:'processing'} : x))
+
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload  = e => resolve(e.target.result.split(',')[1])
+          reader.onerror = () => reject(new Error('Read failed'))
+          reader.readAsDataURL(item.file)
+        })
+
+        const response = await fetch('/api/extract-employer', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ base64, mediaType: 'application/pdf' }),
+        })
+
+        if (!response.ok) throw new Error('Extraction failed')
+        const { data } = await response.json()
+        const profile  = apiResultToProfile(data)
+        return { ...item, status: 'done', result: { data, profile } }
+      } catch(e) {
+        return { ...item, status: 'error', error: e.message }
+      }
+    }))
+
+    setItems(updated)
+    setProc(false)
+    setDone(true)
+  }
+
+  function saveAll() {
+    const successful = items.filter(i => i.status === 'done' && i.result)
+    const employers  = successful.map((item, idx) => ({
+      id:       'e' + Date.now() + idx,
+      name:     item.result.data.employerName || item.name.replace('.pdf',''),
+      number:   `EMP-${String(existingCount + idx + 1).padStart(3,'0')}`,
+      industry: '',
+      status:   'active',
+      members:  0,
+      contact:  item.result.profile.payrollContact || '',
+      phone:    item.result.profile.payrollPhone   || '',
+      email:    item.result.profile.payrollEmail   || '',
+      portal:   false,
+    }))
+    const profiles = employers.map((emp, idx) => ({
+      ...successful[idx].result.profile,
+      employerId:   emp.id,
+      employerName: emp.name,
+    }))
+    onSaveAll(employers, profiles)
+  }
+
+  const successCount = items.filter(i => i.status === 'done').length
+  const errorCount   = items.filter(i => i.status === 'error').length
+
+  return (
+    <div>
+      <button onClick={onBack} style={{ fontSize:12, color:T.orange, background:'none', border:'none', cursor:'pointer', fontWeight:600, marginBottom:16, fontFamily:'inherit' }}>← Back</button>
+
+      {/* Drop zone */}
+      {!processing && !done && (
+        <label
+          style={{ display:'block', border:`2px dashed ${T.border}`, borderRadius:12, padding:'32px 24px', textAlign:'center', cursor:'pointer', background:'#fafafa', marginBottom:16 }}
+          onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor=T.green }}
+          onDragLeave={e => { e.currentTarget.style.borderColor=T.border }}
+          onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor=T.border; addFiles(e.dataTransfer.files) }}>
+          <input ref={inputRef} type="file" accept=".pdf,.txt" multiple onChange={e => { addFiles(e.target.files); e.target.value='' }} style={{ display:'none' }}/>
+          <div style={{ fontSize:40, marginBottom:10 }}>📦</div>
+          <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:6 }}>Drop all info packs here</div>
+          <div style={{ fontSize:12, color:T.gray }}>or click to browse · select multiple PDFs at once</div>
+        </label>
+      )}
+
+      {/* File list */}
+      {items.length > 0 && (
+        <div style={{ marginBottom:16 }}>
+          {items.map(item => {
+            const statusConfig = {
+              queued:     { icon:'○', color:T.gray,  bg:'#f9fafb' },
+              processing: { icon:'⏳', color:T.blue,  bg:'#eff6ff' },
+              done:       { icon:'✓', color:T.green, bg:'#f0fdf4' },
+              error:      { icon:'✗', color:T.red,   bg:'#fff1f2' },
+            }[item.status] || { icon:'○', color:T.gray, bg:'#f9fafb' }
+
+            return (
+              <div key={item.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:statusConfig.bg, borderRadius:9, marginBottom:6, border:`1px solid ${statusConfig.color}20` }}>
+                <span style={{ fontSize:16, color:statusConfig.color, width:20, textAlign:'center' }}>{statusConfig.icon}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:T.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.name}</div>
+                  {item.result && <div style={{ fontSize:11, color:T.green }}>{item.result.data.employerName || 'Extracted'}</div>}
+                  {item.error  && <div style={{ fontSize:11, color:T.red }}>{item.error}</div>}
+                </div>
+                {!processing && !done && (
+                  <button onClick={() => setItems(prev => prev.filter(x => x.id !== item.id))}
+                    style={{ background:'none', border:'none', cursor:'pointer', color:T.gray, fontSize:16 }}>×</button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Progress summary when done */}
+      {done && (
+        <div style={{ background: errorCount === 0 ? '#f0fdf4' : '#fffbeb', border:`1px solid ${errorCount===0?'#bbf7d0':'#fde68a'}`, borderRadius:10, padding:'12px 14px', marginBottom:16, display:'flex', gap:10, alignItems:'center' }}>
+          <span style={{ fontSize:24 }}>{errorCount === 0 ? '✅' : '⚠️'}</span>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color: errorCount===0 ? T.green : '#92400e' }}>
+              {successCount} of {items.length} employers extracted successfully
+            </div>
+            {errorCount > 0 && <div style={{ fontSize:11, color:'#92400e' }}>{errorCount} failed — these will be skipped</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:16, borderTop:`1px solid ${T.border}` }}>
+        {!done && !processing && items.length > 0 && (
+          <button onClick={processAll}
+            style={{ padding:'10px 20px', background:T.green, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            ⚡ Extract {items.length} Info Pack{items.length!==1?'s':''}
+          </button>
+        )}
+        {processing && (
+          <div style={{ padding:'10px 20px', background:'#f3f4f6', borderRadius:9, fontSize:13, color:T.gray }}>
+            Processing {items.filter(i=>i.status==='processing').length} files…
+          </div>
+        )}
+        {done && successCount > 0 && (
+          <button onClick={saveAll}
+            style={{ padding:'10px 20px', background:T.orange, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            Save {successCount} Employer{successCount!==1?'s':''}
+          </button>
+        )}
       </div>
     </div>
   )
