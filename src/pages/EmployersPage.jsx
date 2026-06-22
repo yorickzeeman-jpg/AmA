@@ -2,121 +2,307 @@ import { useState } from 'react'
 import { T, emptyBenefitProfile } from '../data.js'
 import { Icon, Empty, Card, Btn, Modal, inputSt, selectSt } from '../ui.jsx'
 
-// ─── PARSE INHOUSE PACK TEXT ─────────────────────────────────────────────────
-// Extracts employer + benefit profile data from an uploaded info pack PDF/text.
-// Uses the same label→value strategy as the Email Intake engine.
-function parseInfoPack(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1)
+// ─── PDF TEXT EXTRACTOR (same safe linear scanner as EmailIntake) ────────────
+function extractTextFromFile(rawText) {
+  const head = rawText.slice(0, 500).trim()
+
+  // HTML document
+  if (head.startsWith('<!DOCTYPE') || head.startsWith('<html') || head.toLowerCase().includes('<body>')) {
+    try {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(rawText, 'text/html')
+      ;['style','script','head'].forEach(tag => doc.querySelectorAll(tag).forEach(el => el.remove()))
+      const walker = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT)
+      const lines = []
+      let node
+      while ((node = walker.nextNode())) {
+        const parts = node.textContent.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0)
+        lines.push(...parts)
+      }
+      return lines.filter((l,i) => l !== lines[i-1]).join('\n')
+    } catch(e) {
+      return rawText.replace(/<[^>]+>/g,'\n').replace(/&nbsp;/g,' ')
+    }
+  }
+
+  // Binary PDF — safe linear Tj/TJ scanner
+  if (head.startsWith('%PDF')) {
+    const tokens = []
+    let pos = 0
+    while (pos < rawText.length && tokens.length < 3000) {
+      const paren = rawText.indexOf('(', pos)
+      if (paren === -1) break
+      // Read PDF string
+      let depth = 0, result = '', i = paren
+      while (i < rawText.length) {
+        const c = rawText[i]
+        if (c === '\\' && i+1 < rawText.length) {
+          const n = rawText[i+1]
+          const esc = {n:'\n',r:'\r',t:'\t','(':' ',')':', ','\\':'\\'}
+          result += esc[n] !== undefined ? esc[n] : n
+          i += 2; continue
+        }
+        if (c === '(') { depth++; if (depth > 1) result += c; i++; continue }
+        if (c === ')') { if (depth === 1) { i++; break }; depth--; result += c; i++; continue }
+        result += c; i++
+      }
+      // Check operator after string
+      let after = i
+      while (after < rawText.length && ' \t\r\n'.includes(rawText[after])) after++
+      const op = rawText.slice(after, after+2)
+      if ((op === 'Tj' || op === 'TJ') && result.trim().length > 0) {
+        const clean = result.trim()
+        // Only keep printable text
+        const printable = clean.split('').filter(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 126).join('')
+        if (printable.length >= 2) tokens.push(printable)
+      }
+      pos = paren + 1
+    }
+    if (tokens.length > 5) return tokens.join('\n')
+
+    // Fallback: ASCII runs
+    const runs = []
+    let cur = ''
+    for (let i = 0; i < rawText.length; i++) {
+      const c = rawText.charCodeAt(i)
+      if (c >= 32 && c <= 126) { cur += rawText[i] }
+      else {
+        if (cur.length >= 4 && /[a-zA-Z]{2}/.test(cur)) {
+          const t = cur.trim()
+          if (t && !/^(stream|endstream|obj|endobj|xref|trailer|BT|ET|Tf|Td|Tj|TJ|cm|q|Q)$/.test(t)) runs.push(t)
+        }
+        cur = ''
+      }
+    }
+    return runs.join('\n')
+  }
+
+  // Plain text
+  return rawText
+}
+
+// ─── INHOUSE PACK PARSER ─────────────────────────────────────────────────────
+// Field mapping built from Amadwala Inhouse Pack structure:
+//
+// PDF Label                          → Portal Field
+// ──────────────────────────────────────────────────
+// "Employer name:"                   → employerName
+// "Name:" (payroll)                  → payrollFirst
+// "Surname:"                         → payrollSurname
+// "Contact number:"                  → payrollPhone
+// "Email address:"                   → payrollEmail
+// "Fund name:"                       → retirementFund.name
+// "Fund code:"                       → retirementFund.fundCode
+// "Administrator:" (first)           → retirementFund.administrator
+// "Normal retirement age:"           → retirementAge
+// "Administration cost amount:"      → retirementFund.administrationCost
+// "Start date:"                      → effectiveDate
+// "Category N  X%  Y%"              → contributionCategories[]
+// "Scheme number:"                   → groupLife.schemeNumber
+// "Rate:" (GLA table row)            → groupLife.rate
+// "Free cover limit:"                → groupLife.freeCoverLimit
+// "Benefit expiry age:"              → groupLife.benefitExpiryAge
+// "Global Education Protector:"      → groupLife.globalEducationProtector
+// "Total rate for income disability" → disability.rate
+// "Waiting period:"                  → disability.waitingPeriodMonths
+// "Escalation rate:"                 → disability.escalationPercent
+// "Contribution Protector:"          → disability.contributionProtectorMonths
+// "Scheme name:" (health section)    → medicalAid.scheme
+// "Scheme number:" (health section)  → medicalAid.schemeNumber
+// "Billing method:"                  → billingMethod
+// "Billing due date"                 → billingDueDate
+// "Payment method:"                  → paymentMethod
+
+function parseInfoPack(rawText) {
+  const text  = extractTextFromFile(rawText)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   const lower = text.toLowerCase()
 
+  // ── find(label, ...) — returns value on same line or next non-empty line ──
   function find(...labels) {
     for (const label of labels) {
-      const idx = lower.indexOf(label.toLowerCase())
-      if (idx === -1) continue
-      // Look at the next content after the label
-      const after = text.slice(idx + label.length, idx + label.length + 120).trim()
-      const lineEnd = after.indexOf('\n')
-      const val = (lineEnd > 0 ? after.slice(0, lineEnd) : after).replace(/^[:\s]+/, '').trim()
-      if (val.length > 0 && val.length < 100) return val
+      const lbl = label.toLowerCase()
+      // Strategy A: "Label: Value" on same line
+      const idx = lower.indexOf(lbl)
+      if (idx !== -1) {
+        const after = text.slice(idx + label.length, idx + label.length + 150).replace(/^[\s:]+/, '').trim()
+        const lineEnd = after.search(/\n/)
+        const sameLine = (lineEnd > 0 ? after.slice(0, lineEnd) : after).trim()
+        if (sameLine.length > 0 && sameLine.length < 120) return sameLine
+      }
+      // Strategy B: label is on its own line, value is the next line
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase() === lbl.replace(/:\s*$/, '') ||
+            lines[i].toLowerCase().startsWith(lbl.replace(/:\s*$/, ''))) {
+          const next = lines[i+1]?.trim()
+          if (next && next.length > 0 && next.length < 120) return next
+        }
+      }
     }
     return ''
   }
 
-  // Employer info
-  const employerName  = find('Employer name:', 'Employer name') || find('Scheme name:')
-  const payrollFirst  = find('Name:', 'First name:')
-  const payrollSur    = find('Surname:')
-  const payrollPhone  = find('Contact number:')
-  const payrollEmail  = find('Email address:')
+  // ── Employer ──────────────────────────────────────────────────────────────
+  const employerName = find('Employer name:', 'Employer name') ||
+    // Some packs have it as the first meaningful line
+    lines.find(l => l.length > 3 && l.length < 60 && /[A-Z]/.test(l[0]) && !l.includes(':')) || ''
+
+  // ── Payroll contact ───────────────────────────────────────────────────────
+  // The pack has "Name:" and "Surname:" as separate lines
+  const payrollFirst = find('Name:', 'First name:')
+  const payrollSur   = find('Surname:')
+  const payrollPhone = find('Contact number:', 'Tel:', 'Phone:')
+  const payrollEmail = find('Email address:', 'Email:') ||
+    text.match(/[\w._%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || ''
   const payrollContact = [payrollFirst, payrollSur].filter(Boolean).join(' ')
 
-  // Retirement fund
-  const fundName      = find('Fund name:')
-  const fundCode      = find('Fund code:')
-  const fundAdmin     = find('Administrator:')
-  const retireAge     = find('Normal retirement age:')
-  const adminCost     = find('Administration cost amount:')
-  const startDate     = find('Start date:', 'Inception date:')
+  // ── Retirement fund ───────────────────────────────────────────────────────
+  const fundName   = find('Fund name:')
+  const fundCode   = find('Fund code:') ||
+    text.match(/\b(\d{5}-\d{5})\b/)?.[1] || ''  // e.g. 24193-44733
+  const fundAdmin  = find('Administrator:')
+  const retireAge  = find('Normal retirement age:') || '65'
+  const adminCost  = find('Administration cost amount:')
+  const startDate  = find('Start date:', 'Inception date:')
 
-  // Contribution categories — scan for table rows like "Category 1  5%  0%"
+  // ── Contribution categories ───────────────────────────────────────────────
+  // Format in PDF: "Category 1  5%  0%"  or  "Category 1\n5%\n0%"
   const catRows = []
-  const catRe = /Category\s+(\d)\s+([\d.]+)%\s+([\d.]+)%/g
+
+  // Pattern A: all on one line
+  const catReA = /Category\s+(\d)\s+([\d.]+)%\s+([\d.]+)%/g
   let m
-  while ((m = catRe.exec(text)) !== null) {
-    catRows.push({ category: `Category ${m[1]}`, employer: parseFloat(m[2]), employee: parseFloat(m[3]) })
+  while ((m = catReA.exec(text)) !== null) {
+    catRows.push({ category:`Category ${m[1]}`, employer:parseFloat(m[2]), employee:parseFloat(m[3]) })
   }
 
-  // GLA
-  const schemeNumber  = find('Scheme number:')
-  const glaBenefit    = find('Group Life benefit Category:') || '3 × Annual Salary'
-  const glaRate       = find('Rate:').replace('%','').trim()
-  const freeCoverLimit= find('Free cover limit:').replace(/[R\s,]/g,'')
-  const expiryAge     = find('Benefit expiry age:')
-  const educBenefit   = lower.includes('education benefit') && lower.includes('yes') ? true : false
-  const globalEdProt  = find('Global Education Protector:')
-  const mortgageProt  = lower.includes('mortgage protector')
+  // Pattern B: category on one line, percentages follow across lines
+  if (catRows.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const catMatch = lines[i].match(/^Category\s+(\d)$/i)
+      if (catMatch) {
+        // Look ahead for two percentage values
+        const nums = []
+        for (let j = i+1; j < Math.min(i+6, lines.length) && nums.length < 2; j++) {
+          const pctMatch = lines[j].match(/([\d.]+)%/)
+          if (pctMatch) nums.push(parseFloat(pctMatch[1]))
+        }
+        if (nums.length === 2) catRows.push({ category:`Category ${catMatch[1]}`, employer:nums[0], employee:nums[1] })
+      }
+    }
+  }
 
-  // PHI / Disability
-  const phiRate       = text.match(/Total rate for\s+income disability\s+benefit[:\s]+([\d.]+)%/i)?.[1] ||
-                        find('Total rate for income disability benefit:').replace('%','') || ''
-  const waitingPeriod = find('Waiting period:').replace(/\D/g,'')
-  const escalation    = find('Escalation rate:').replace('%','')
-  const contribProt   = find('Contribution Protector:').replace(/\D/g,'')
+  // Pattern C: table row with employer/employee columns
+  if (catRows.length === 0) {
+    const tableRe = /(\d)\s+([\d.]+)\s*%\s+([\d.]+)\s*%/g
+    while ((m = tableRe.exec(text)) !== null) {
+      if (parseInt(m[1]) <= 6) {
+        catRows.push({ category:`Category ${m[1]}`, employer:parseFloat(m[2]), employee:parseFloat(m[3]) })
+      }
+    }
+  }
 
-  // Medical aid
-  const medScheme     = find('Scheme name:')  // second occurrence
-  const medSchemeNo   = schemeNumber === find('Scheme number:') ? '' : find('Scheme number:')
+  // ── GLA ───────────────────────────────────────────────────────────────────
+  const schemeNumber = find('Scheme number:') ||
+    text.match(/\b(\d{10})\b/)?.[1] || ''  // 10-digit scheme numbers
+
+  // GLA rate — look for "Rate:" near "1.46" or just the pattern
+  const glaRateMatch = text.match(/(?:rate|Rate)[:\s]+([\d.]+)%/)
+  const glaRate = glaRateMatch?.[1] ||
+    find('Rate:').replace(/[%\s]/g,'') || ''
+
+  const freeCoverRaw = find('Free cover limit:')
+  const freeCoverLimit = freeCoverRaw.replace(/[R\s,]/g,'') || ''
+
+  const expiryAgeRaw = find('Benefit expiry age:')
+  const expiryAge = expiryAgeRaw.match(/\d+/)?.[0] || '65'
+
+  const globalEdProt = find('Global Education Protector:')
+  const educBenefit  = lower.includes('education benefit')
+  const mortgageProt = lower.includes('mortgage protector')
+
+  // ── PHI / Disability ──────────────────────────────────────────────────────
+  // "Total rate for income disability benefit: 1.42%"
+  const phiRateMatch = text.match(/total\s+rate\s+for\s+income\s+disability\s+benefit[:\s]+([\d.]+)%/i) ||
+                       text.match(/income\s+disability.*?([\d.]+)%/i)
+  const phiRate = phiRateMatch?.[1] || ''
+
+  const waitingRaw  = find('Waiting period:')
+  const waitingMonths = waitingRaw.match(/\d+/)?.[0] || '3'
+
+  const escalationRaw = find('Escalation rate:')
+  const escalation = escalationRaw.match(/[\d.]+/)?.[0] || '5'
+
+  const contribProtRaw = find('Contribution Protector:')
+  const contribProt = contribProtRaw.match(/\d+/)?.[0] || '12'
+
+  // ── Medical Aid ───────────────────────────────────────────────────────────
+  // "Scheme name: Discovery Health" — may appear twice (GLA + Medical)
+  // Find ALL occurrences and take the last one (medical aid section)
+  const schemeNameMatches = [...lower.matchAll(/scheme name[:\s]+([^\n]+)/gi)]
+  const medScheme = schemeNameMatches.length > 1
+    ? text.slice(schemeNameMatches[schemeNameMatches.length-1].index).split('\n')[0].replace(/scheme name[:\s]+/i,'').trim()
+    : find('Scheme name:') || ''
+
+  // Same for scheme number — take the second occurrence for medical
+  const schemeNoMatches = [...lower.matchAll(/scheme number[:\s]+([^\n]+)/gi)]
+  const medSchemeNo = schemeNoMatches.length > 1
+    ? text.slice(schemeNoMatches[schemeNoMatches.length-1].index).split('\n')[0].replace(/scheme number[:\s]+/i,'').trim()
+    : ''
+
   const billingMethod = find('Billing method:')
-  const billingDue    = find('Billing due date')
+  const billingDue    = find('Billing due date (to scheme):', 'Billing due date:','Billing due date') ||
+    text.match(/(?:billing due date)[^0-9]*(\d+(?:th|st|nd|rd)?)/i)?.[1] || ''
   const paymentMethod = find('Payment method:')
-  const compulsory    = lower.includes('compulsory: yes') || lower.includes('compulsory:\nyes')
+  const compulsory    = lower.includes('compulsory: yes') || lower.includes('compulsory:\nyes') ||
+    lower.includes('compulsory: yes, or')
 
-  // Build profile object
+  // ── Build profile ─────────────────────────────────────────────────────────
   const profile = {
     employerName,
     payrollContact,
     payrollPhone,
     payrollEmail,
-    effectiveDate: startDate || new Date().toISOString().split('T')[0],
-    retirementAge: retireAge ? parseInt(retireAge) : 65,
+    effectiveDate: startDate ? startDate.slice(0,10) : new Date().toISOString().split('T')[0],
+    retirementAge: parseInt(retireAge) || 65,
     billingMethod:  billingMethod || 'Arrears',
-    billingDueDate: billingDue || '14th',
+    billingDueDate: billingDue   || '14th',
     paymentMethod:  paymentMethod || 'Debit Order',
 
     retirementFund: {
-      name: fundName,
+      name:                  fundName,
       fundCode,
-      administrator: fundAdmin,
-      normalRetirementAge: retireAge ? parseInt(retireAge) : 65,
-      administrationCost: adminCost ? parseFloat(adminCost.replace('R','').replace(',','')) : 0,
-      contributionCategories: catRows.length > 0 ? catRows : [],
+      administrator:         fundAdmin,
+      normalRetirementAge:   parseInt(retireAge) || 65,
+      administrationCost:    adminCost ? parseFloat(adminCost.replace(/[R,\s]/g,'')) : 0,
+      contributionCategories: catRows,
     },
 
     groupLife: {
-      administrator: find('Administrator:') || 'Discovery',
+      administrator:         fundAdmin || 'Discovery',
       schemeNumber,
-      benefit: '3 × Annual Salary',
-      rate: glaRate ? parseFloat(glaRate) : 0,
-      educationBenefit: educBenefit,
+      benefit:               '3 × Annual Salary',
+      rate:                  glaRate ? parseFloat(glaRate) : 0,
+      educationBenefit:      educBenefit,
       globalEducationProtector: globalEdProt,
-      mortgageProtector: mortgageProt,
-      freeCoverLimit: freeCoverLimit ? parseInt(freeCoverLimit) : 0,
-      benefitExpiryAge: expiryAge ? parseInt(expiryAge) : 65,
+      mortgageProtector:     mortgageProt,
+      freeCoverLimit:        freeCoverLimit ? parseInt(freeCoverLimit) : 0,
+      benefitExpiryAge:      parseInt(expiryAge) || 65,
     },
 
     disability: {
-      rate: phiRate ? parseFloat(phiRate) : 0,
-      waitingPeriodMonths: waitingPeriod ? parseInt(waitingPeriod) : 3,
-      escalationPercent: escalation ? parseFloat(escalation) : 5,
-      benefitExpiryAge: expiryAge ? parseInt(expiryAge) : 65,
-      contributionProtectorMonths: contribProt ? parseInt(contribProt) : 12,
+      rate:                      phiRate ? parseFloat(phiRate) : 0,
+      waitingPeriodMonths:       parseInt(waitingMonths) || 3,
+      escalationPercent:         parseFloat(escalation) || 5,
+      benefitExpiryAge:          parseInt(expiryAge) || 65,
+      contributionProtectorMonths: parseInt(contribProt) || 12,
     },
 
     medicalAid: {
-      scheme: medScheme || 'Discovery Health',
-      schemeNumber: medSchemeNo || find('Scheme number:'),
+      scheme:        medScheme || find('Scheme name:'),
+      schemeNumber:  medSchemeNo || schemeNumber,
       billingMethod: billingMethod || 'Arrears',
-      billingDueDate: billingDue || '14th',
+      billingDueDate:billingDue   || '14th',
       paymentMethod: paymentMethod || 'Debit Order',
       compulsory,
     },
@@ -124,13 +310,16 @@ function parseInfoPack(text) {
     funeralCover: null,
   }
 
-  // Count extracted fields
-  const extracted = Object.entries({
-    employerName, fundName, fundCode, fundAdmin, schemeNumber,
-    glaRate, phiRate, billingMethod, payrollContact,
-  }).filter(([,v]) => v && v.length > 0).length
+  // ── Extraction score ──────────────────────────────────────────────────────
+  const checks = {
+    employerName, payrollContact, fundName, fundCode, fundAdmin,
+    schemeNumber, glaRate, phiRate, billingMethod, payrollEmail,
+    catRows: catRows.length > 0 ? 'yes' : '',
+    medScheme,
+  }
+  const extracted = Object.values(checks).filter(v => v && String(v).length > 0).length
 
-  return { profile, employerName, extracted, totalFields: 9 }
+  return { profile, employerName, extracted, totalFields: Object.keys(checks).length }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -223,34 +412,33 @@ function AddEmployerModal({ onClose, onAdd, existingCount }) {
 
     const reader = new FileReader()
     reader.onload = e => {
-      // Simulate processing progress
       let pct = 0
       const iv = setInterval(() => {
-        pct += 20
-        setUpPct(Math.min(pct, 90))
-        if (pct >= 90) {
+        pct += 25
+        setUpPct(Math.min(pct, 85))
+        if (pct >= 85) {
           clearInterval(iv)
-          const text = e.target.result
-          const result = parseInfoPack(text)
+          const rawText = e.target.result
+          const result  = parseInfoPack(rawText)
           setResult(result)
           setUpPct(100)
           setUploading(false)
           setUpDone(true)
-          // Pre-fill form with extracted employer name
-          if (result.employerName) {
-            setForm(f => ({
-              ...f,
-              name: result.employerName,
-              number: `EMP-${String(existingCount + 1).padStart(3,'0')}`,
-              contact: result.profile.payrollContact || '',
-              phone: result.profile.payrollPhone || '',
-              email: result.profile.payrollEmail || '',
-            }))
-          }
+          // Pre-fill form
+          setForm(f => ({
+            ...f,
+            name:    result.employerName || f.name,
+            number:  f.number || `EMP-${String(existingCount + 1).padStart(3,'0')}`,
+            contact: result.profile.payrollContact || f.contact,
+            phone:   result.profile.payrollPhone   || f.phone,
+            email:   result.profile.payrollEmail   || f.email,
+          }))
         }
-      }, 200)
+      }, 150)
     }
-    reader.readAsText(file)
+    reader.onerror = () => { setUploading(false); alert('Could not read file.') }
+    // MUST use readAsBinaryString for PDFs — readAsText mangles binary encodings
+    reader.readAsBinaryString(file)
   }
 
   function handleSubmit() {
