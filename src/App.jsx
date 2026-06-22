@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T } from './data.js'
 import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile } from './supabase.js'
-import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'

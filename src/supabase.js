@@ -5,8 +5,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-// ── CUSTOM AUTH — name + password, no email ──────────────────
-// Local fallback users — used if Supabase is unreachable
+// ── AUTH — name + password only, no email ────────────────────────────────────
 const LOCAL_USERS = [
   { id:'u0', name:'Yorick',    password:'Yorick2017', role:'general_manager', avatar:'YZ', status:'active' },
   { id:'u1', name:'Leandre',   password:'Yorick2017', role:'general_manager', avatar:'LV', status:'active' },
@@ -22,7 +21,7 @@ export async function signInWithName(name, password) {
   const nameTrimmed = name.trim()
   const passTrimmed = password.trim()
 
-  // Always check local users first — fast and reliable
+  // Check local users first — always works
   const local = LOCAL_USERS.find(u =>
     u.name.toLowerCase() === nameTrimmed.toLowerCase() &&
     u.password === passTrimmed &&
@@ -38,23 +37,15 @@ export async function signInWithName(name, password) {
       .ilike('name', nameTrimmed)
       .eq('status', 'active')
       .single()
-
     if (!error && data && data.password === passTrimmed) return data
   } catch (e) {
-    // Supabase unreachable — already checked local above
+    // Supabase unreachable — local auth already handled above
   }
 
   throw new Error('Incorrect name or password.')
 }
 
-export async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw error
-  return data
-}
-
 export async function signOut() {
-  // Just clear local — no auth session to sign out of
   return true
 }
 
@@ -72,134 +63,16 @@ export async function getStaffProfile(email) {
   return data
 }
 
-// ── EMPLOYERS ─────────────────────────────────────────────────
+// ── EMPLOYERS ────────────────────────────────────────────────────────────────
 export async function fetchEmployers() {
   const { data, error } = await supabase
     .from('employers')
     .select('*')
     .order('name')
-  if (error) throw error
-  return data
-}
-
-// ── CASES ─────────────────────────────────────────────────────
-export async function fetchCases() {
-  const { data, error } = await supabase
-    .from('cases')
-    .select('*, employer:employers(name,number), assigned:staff!cases_assigned_to_fkey(name,avatar)')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data
-}
-
-export async function createCase(caseData) {
-  const { data, error } = await supabase
-    .from('cases')
-    .insert([caseData])
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function updateCase(id, updates) {
-  const { data, error } = await supabase
-    .from('cases')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-// ── CASE NOTES ────────────────────────────────────────────────
-export async function addNote(caseId, userId, text) {
-  const { data, error } = await supabase
-    .from('case_notes')
-    .insert([{ case_id: caseId, user_id: userId, text }])
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function fetchNotes(caseId) {
-  const { data, error } = await supabase
-    .from('case_notes')
-    .select('*, staff(name,avatar)')
-    .eq('case_id', caseId)
-    .order('created_at')
-  if (error) throw error
-  return data
-}
-
-// ── AUDIT LOG ─────────────────────────────────────────────────
-export async function addAudit(caseId, userId, action, type = 'action') {
-  const { error } = await supabase
-    .from('audit_log')
-    .insert([{ case_id: caseId, user_id: userId, action, type }])
-  if (error) console.error('Audit log error:', error)
-}
-
-export async function fetchAudit(caseId) {
-  const { data, error } = await supabase
-    .from('audit_log')
-    .select('*, staff(name,avatar)')
-    .eq('case_id', caseId)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data
-}
-
-// ── BILLING TASKS ─────────────────────────────────────────────
-export async function fetchBillingTasks() {
-  const { data, error } = await supabase
-    .from('billing_tasks')
-    .select('*, employer:employers(name), assigned:staff!billing_tasks_assigned_to_fkey(name,avatar)')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data
-}
-
-export async function createBillingTask(taskData) {
-  const { data, error } = await supabase
-    .from('billing_tasks')
-    .insert([taskData])
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function updateBillingTask(id, updates) {
-  const { data, error } = await supabase
-    .from('billing_tasks')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-// ── STAFF ─────────────────────────────────────────────────────
-export async function fetchStaff() {
-  const { data, error } = await supabase
-    .from('staff')
-    .select('*')
-    .order('name')
-  if (error) throw error
-  return data
-}
-
-// ── EMPLOYERS ─────────────────────────────────────────────────
-export async function fetchEmployers() {
-  const { data, error } = await supabase
-    .from('employers')
-    .select('*')
-    .order('name')
-  if (error) { console.warn('[Supabase] fetchEmployers:', error.message); return null }
+  if (error) {
+    console.warn('[Supabase] fetchEmployers:', error.message)
+    return null
+  }
   return data
 }
 
@@ -223,13 +96,15 @@ export async function saveEmployer(emp) {
   return !error
 }
 
-// ── BENEFIT PROFILES ──────────────────────────────────────────
+// ── BENEFIT PROFILES ─────────────────────────────────────────────────────────
 export async function fetchBenefitProfiles() {
   const { data, error } = await supabase
     .from('benefit_profiles')
     .select('employer_id, profile_data')
-  if (error) { console.warn('[Supabase] fetchBenefitProfiles:', error.message); return null }
-  // Convert array to object keyed by employer_id
+  if (error) {
+    console.warn('[Supabase] fetchBenefitProfiles:', error.message)
+    return null
+  }
   const map = {}
   ;(data || []).forEach(row => { map[row.employer_id] = row.profile_data })
   return map
@@ -238,7 +113,11 @@ export async function fetchBenefitProfiles() {
 export async function saveBenefitProfile(employerId, profile) {
   const { error } = await supabase
     .from('benefit_profiles')
-    .upsert({ employer_id: employerId, profile_data: profile, updated_at: new Date().toISOString() })
+    .upsert({
+      employer_id:  employerId,
+      profile_data: profile,
+      updated_at:   new Date().toISOString(),
+    })
   if (error) console.warn('[Supabase] saveBenefitProfile:', error.message)
   return !error
 }
