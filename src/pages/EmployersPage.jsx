@@ -2,138 +2,144 @@ import { useState } from 'react'
 import { T, emptyBenefitProfile } from '../data.js'
 import { Icon, Empty, Card, Btn, Modal, inputSt, selectSt } from '../ui.jsx'
 
-// ─── PDF TEXT EXTRACTOR (same safe linear scanner as EmailIntake) ────────────
-function extractTextFromFile(rawText) {
-  const head = rawText.slice(0, 500).trim()
+// ─── PDF TEXT EXTRACTION ─────────────────────────────────────────────────────
+// The Amadwala Inhouse Pack uses FlateDecode compressed PDF streams.
+// Binary Tj/TJ scanning returns garbage on compressed PDFs.
+// Solution: use Claude API to extract text, with structured text fallback.
 
-  // HTML document
-  if (head.startsWith('<!DOCTYPE') || head.startsWith('<html') || head.toLowerCase().includes('<body>')) {
+async function extractPDFTextViaAPI(base64Data) {
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64Data }
+            },
+            {
+              type: 'text',
+              text: 'Extract ALL text from this document exactly as it appears, preserving labels and values on separate lines. Output only the raw text, no commentary.'
+            }
+          ]
+        }]
+      })
+    })
+    const data = await response.json()
+    return data.content?.[0]?.text || ''
+  } catch(e) {
+    return ''
+  }
+}
+
+// Read file as base64 for API, and as binary string for fallback
+async function readFileForExtraction(file) {
+  return new Promise((resolve) => {
+    // Read as base64 for Claude API
+    const b64Reader = new FileReader()
+    b64Reader.onload = async (e) => {
+      const base64 = e.target.result.split(',')[1]
+
+      // Try Claude API first
+      const apiText = await extractPDFTextViaAPI(base64)
+      if (apiText && apiText.length > 100) {
+        resolve({ text: apiText, method: 'claude-api' })
+        return
+      }
+
+      // Fallback: read as binary string for Tj/TJ scanner
+      const binReader = new FileReader()
+      binReader.onload = (e2) => {
+        const raw = e2.target.result
+        const extracted = extractFromBinary(raw)
+        resolve({ text: extracted, method: extracted.length > 50 ? 'binary-scan' : 'fallback' })
+      }
+      binReader.readAsBinaryString(file)
+    }
+    b64Reader.readAsDataURL(file)
+  })
+}
+
+// Binary Tj/TJ scanner for uncompressed PDFs and HTML
+function extractFromBinary(raw) {
+  const head = raw.slice(0, 500).trim()
+
+  // HTML
+  if (head.startsWith('<!DOCTYPE') || head.toLowerCase().includes('<html')) {
     try {
       const parser = new DOMParser()
-      const doc = parser.parseFromString(rawText, 'text/html')
-      ;['style','script','head'].forEach(tag => doc.querySelectorAll(tag).forEach(el => el.remove()))
+      const doc = parser.parseFromString(raw, 'text/html')
+      ;['style','script','head'].forEach(t => doc.querySelectorAll(t).forEach(el => el.remove()))
       const walker = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT)
       const lines = []
       let node
       while ((node = walker.nextNode())) {
-        const parts = node.textContent.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0)
-        lines.push(...parts)
+        raw.split(/\n+/).forEach(p => { if(p.trim()) lines.push(p.trim()) })
+        node.textContent.split(/\n+/).forEach(p => { if(p.trim()) lines.push(p.trim()) })
       }
       return lines.filter((l,i) => l !== lines[i-1]).join('\n')
-    } catch(e) {
-      return rawText.replace(/<[^>]+>/g,'\n').replace(/&nbsp;/g,' ')
-    }
+    } catch(e) {}
   }
 
-  // Binary PDF — safe linear Tj/TJ scanner
+  // Binary PDF — Tj/TJ scan
   if (head.startsWith('%PDF')) {
     const tokens = []
     let pos = 0
-    while (pos < rawText.length && tokens.length < 3000) {
-      const paren = rawText.indexOf('(', pos)
+    while (pos < raw.length && tokens.length < 3000) {
+      const paren = raw.indexOf('(', pos)
       if (paren === -1) break
-      // Read PDF string
       let depth = 0, result = '', i = paren
-      while (i < rawText.length) {
-        const c = rawText[i]
-        if (c === '\\' && i+1 < rawText.length) {
-          const n = rawText[i+1]
-          const esc = {n:'\n',r:'\r',t:'\t','(':' ',')':', ','\\':'\\'}
-          result += esc[n] !== undefined ? esc[n] : n
-          i += 2; continue
-        }
+      while (i < raw.length) {
+        const c = raw[i]
+        if (c === '\\' && i+1 < raw.length) { result += raw[i+1]; i += 2; continue }
         if (c === '(') { depth++; if (depth > 1) result += c; i++; continue }
         if (c === ')') { if (depth === 1) { i++; break }; depth--; result += c; i++; continue }
         result += c; i++
       }
-      // Check operator after string
       let after = i
-      while (after < rawText.length && ' \t\r\n'.includes(rawText[after])) after++
-      const op = rawText.slice(after, after+2)
-      if ((op === 'Tj' || op === 'TJ') && result.trim().length > 0) {
-        const clean = result.trim()
-        // Only keep printable text
-        const printable = clean.split('').filter(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 126).join('')
-        if (printable.length >= 2) tokens.push(printable)
+      while (after < raw.length && ' \t\r\n'.includes(raw[after])) after++
+      const op = raw.slice(after, after+2)
+      if ((op === 'Tj' || op === 'TJ') && result.trim().length >= 2) {
+        const clean = result.trim().split('').filter(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) <= 126).join('')
+        if (clean.length >= 2) tokens.push(clean)
       }
       pos = paren + 1
     }
-    if (tokens.length > 5) return tokens.join('\n')
-
-    // Fallback: ASCII runs
-    const runs = []
-    let cur = ''
-    for (let i = 0; i < rawText.length; i++) {
-      const c = rawText.charCodeAt(i)
-      if (c >= 32 && c <= 126) { cur += rawText[i] }
-      else {
-        if (cur.length >= 4 && /[a-zA-Z]{2}/.test(cur)) {
-          const t = cur.trim()
-          if (t && !/^(stream|endstream|obj|endobj|xref|trailer|BT|ET|Tf|Td|Tj|TJ|cm|q|Q)$/.test(t)) runs.push(t)
-        }
-        cur = ''
-      }
-    }
-    return runs.join('\n')
+    if (tokens.length > 10) return tokens.join('\n')
   }
 
-  // Plain text
-  return rawText
+  // Plain text passthrough
+  return raw
 }
 
 // ─── INHOUSE PACK PARSER ─────────────────────────────────────────────────────
-// Field mapping built from Amadwala Inhouse Pack structure:
-//
-// PDF Label                          → Portal Field
-// ──────────────────────────────────────────────────
-// "Employer name:"                   → employerName
-// "Name:" (payroll)                  → payrollFirst
-// "Surname:"                         → payrollSurname
-// "Contact number:"                  → payrollPhone
-// "Email address:"                   → payrollEmail
-// "Fund name:"                       → retirementFund.name
-// "Fund code:"                       → retirementFund.fundCode
-// "Administrator:" (first)           → retirementFund.administrator
-// "Normal retirement age:"           → retirementAge
-// "Administration cost amount:"      → retirementFund.administrationCost
-// "Start date:"                      → effectiveDate
-// "Category N  X%  Y%"              → contributionCategories[]
-// "Scheme number:"                   → groupLife.schemeNumber
-// "Rate:" (GLA table row)            → groupLife.rate
-// "Free cover limit:"                → groupLife.freeCoverLimit
-// "Benefit expiry age:"              → groupLife.benefitExpiryAge
-// "Global Education Protector:"      → groupLife.globalEducationProtector
-// "Total rate for income disability" → disability.rate
-// "Waiting period:"                  → disability.waitingPeriodMonths
-// "Escalation rate:"                 → disability.escalationPercent
-// "Contribution Protector:"          → disability.contributionProtectorMonths
-// "Scheme name:" (health section)    → medicalAid.scheme
-// "Scheme number:" (health section)  → medicalAid.schemeNumber
-// "Billing method:"                  → billingMethod
-// "Billing due date"                 → billingDueDate
-// "Payment method:"                  → paymentMethod
-
-function parseInfoPack(rawText) {
-  const text  = extractTextFromFile(rawText)
+function parseInfoPack(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   const lower = text.toLowerCase()
 
-  // ── find(label, ...) — returns value on same line or next non-empty line ──
+  // find() — checks same-line value AND next-line value
   function find(...labels) {
     for (const label of labels) {
-      const lbl = label.toLowerCase()
+      const lbl = label.toLowerCase().replace(/:?\s*$/, '')
+
       // Strategy A: "Label: Value" on same line
-      const idx = lower.indexOf(lbl)
+      const idx = lower.indexOf(lbl + ':')
       if (idx !== -1) {
-        const after = text.slice(idx + label.length, idx + label.length + 150).replace(/^[\s:]+/, '').trim()
-        const lineEnd = after.search(/\n/)
-        const sameLine = (lineEnd > 0 ? after.slice(0, lineEnd) : after).trim()
-        if (sameLine.length > 0 && sameLine.length < 120) return sameLine
+        const after = text.slice(idx + label.length + 1, idx + label.length + 150).replace(/^\s+/, '')
+        const lineEnd = after.indexOf('\n')
+        const val = (lineEnd > 0 ? after.slice(0, lineEnd) : after).trim()
+        if (val.length > 0 && val.length < 120 && !val.startsWith('<')) return val
       }
-      // Strategy B: label is on its own line, value is the next line
+
+      // Strategy B: label on its own line, value is next line
       for (let i = 0; i < lines.length; i++) {
-        if (lines[i].toLowerCase() === lbl.replace(/:\s*$/, '') ||
-            lines[i].toLowerCase().startsWith(lbl.replace(/:\s*$/, ''))) {
+        const lineLower = lines[i].toLowerCase()
+        if (lineLower === lbl || lineLower === lbl + ':') {
           const next = lines[i+1]?.trim()
           if (next && next.length > 0 && next.length < 120) return next
         }
@@ -143,183 +149,172 @@ function parseInfoPack(rawText) {
   }
 
   // ── Employer ──────────────────────────────────────────────────────────────
-  const employerName = find('Employer name:', 'Employer name') ||
-    // Some packs have it as the first meaningful line
-    lines.find(l => l.length > 3 && l.length < 60 && /[A-Z]/.test(l[0]) && !l.includes(':')) || ''
+  const employerName = find('Employer name')
 
   // ── Payroll contact ───────────────────────────────────────────────────────
-  // The pack has "Name:" and "Surname:" as separate lines
-  const payrollFirst = find('Name:', 'First name:')
-  const payrollSur   = find('Surname:')
-  const payrollPhone = find('Contact number:', 'Tel:', 'Phone:')
-  const payrollEmail = find('Email address:', 'Email:') ||
-    text.match(/[\w._%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || ''
+  // "Name:" is ambiguous — find it only AFTER "Payroll Contact" section
+  let payrollFirst = '', payrollSur = ''
+  const payrollIdx = lower.indexOf('payroll contact')
+  if (payrollIdx !== -1) {
+    const payrollSection = text.slice(payrollIdx, payrollIdx + 400)
+    const pLower = payrollSection.toLowerCase()
+    const nameMatch = pLower.match(/\bname\s*:\s*([^\n]+)/i)
+    const surMatch  = pLower.match(/surname\s*:\s*([^\n]+)/i)
+    if (nameMatch) payrollFirst = payrollSection.slice(nameMatch.index + nameMatch[0].indexOf(':')+1, nameMatch.index + nameMatch[0].length + 30).split('\n')[0].trim()
+    if (surMatch)  payrollSur   = payrollSection.slice(surMatch.index  + surMatch[0].indexOf(':')+1,  surMatch.index  + surMatch[0].length  + 30).split('\n')[0].trim()
+  }
+  if (!payrollFirst) payrollFirst = find('Name')
+  if (!payrollSur)   payrollSur   = find('Surname')
   const payrollContact = [payrollFirst, payrollSur].filter(Boolean).join(' ')
+  const payrollPhone   = find('Contact number')
+  const payrollEmail   = find('Email address') || text.match(/[\w._%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || ''
 
   // ── Retirement fund ───────────────────────────────────────────────────────
-  const fundName   = find('Fund name:')
-  const fundCode   = find('Fund code:') ||
-    text.match(/\b(\d{5}-\d{5})\b/)?.[1] || ''  // e.g. 24193-44733
-  const fundAdmin  = find('Administrator:')
-  const retireAge  = find('Normal retirement age:') || '65'
-  const adminCost  = find('Administration cost amount:')
-  const startDate  = find('Start date:', 'Inception date:')
+  const fundName  = find('Fund name')
+  const fundCode  = find('Fund code') || text.match(/\b(\d{5}-\d{5})\b/)?.[1] || ''
+  const fundAdmin = find('Administrator')
+  const retireAge = find('Normal retirement age') || '65'
+  const adminCost = find('Administration cost amount')
+  const startDate = find('Start date', 'Inception date')
 
   // ── Contribution categories ───────────────────────────────────────────────
-  // Format in PDF: "Category 1  5%  0%"  or  "Category 1\n5%\n0%"
   const catRows = []
-
-  // Pattern A: all on one line
-  const catReA = /Category\s+(\d)\s+([\d.]+)%\s+([\d.]+)%/g
+  // Pattern: "Category 1  5%  0%"
+  const catRe = /Category\s+(\d)\s+([\d.]+)%\s+([\d.]+)%/g
   let m
-  while ((m = catReA.exec(text)) !== null) {
+  while ((m = catRe.exec(text)) !== null) {
     catRows.push({ category:`Category ${m[1]}`, employer:parseFloat(m[2]), employee:parseFloat(m[3]) })
   }
-
-  // Pattern B: category on one line, percentages follow across lines
+  // Pattern: rows split across lines
   if (catRows.length === 0) {
     for (let i = 0; i < lines.length; i++) {
-      const catMatch = lines[i].match(/^Category\s+(\d)$/i)
-      if (catMatch) {
-        // Look ahead for two percentage values
+      const cm = lines[i].match(/^Category\s+(\d)$/)
+      if (cm) {
         const nums = []
-        for (let j = i+1; j < Math.min(i+6, lines.length) && nums.length < 2; j++) {
-          const pctMatch = lines[j].match(/([\d.]+)%/)
-          if (pctMatch) nums.push(parseFloat(pctMatch[1]))
+        for (let j = i+1; j < Math.min(i+5, lines.length) && nums.length < 2; j++) {
+          const pm = lines[j].match(/([\d.]+)%/)
+          if (pm) nums.push(parseFloat(pm[1]))
         }
-        if (nums.length === 2) catRows.push({ category:`Category ${catMatch[1]}`, employer:nums[0], employee:nums[1] })
-      }
-    }
-  }
-
-  // Pattern C: table row with employer/employee columns
-  if (catRows.length === 0) {
-    const tableRe = /(\d)\s+([\d.]+)\s*%\s+([\d.]+)\s*%/g
-    while ((m = tableRe.exec(text)) !== null) {
-      if (parseInt(m[1]) <= 6) {
-        catRows.push({ category:`Category ${m[1]}`, employer:parseFloat(m[2]), employee:parseFloat(m[3]) })
+        if (nums.length === 2) catRows.push({ category:`Category ${cm[1]}`, employer:nums[0], employee:nums[1] })
       }
     }
   }
 
   // ── GLA ───────────────────────────────────────────────────────────────────
-  const schemeNumber = find('Scheme number:') ||
-    text.match(/\b(\d{10})\b/)?.[1] || ''  // 10-digit scheme numbers
+  // Scheme number — first occurrence (GLA section, before medical)
+  const schemeNoAll = [...text.matchAll(/scheme number[:\s]+([^\n]+)/gi)]
+  const schemeNumber = schemeNoAll[0]
+    ? schemeNoAll[0][0].replace(/scheme number[:\s]+/i,'').trim().replace(/\D/g,'').slice(0,10)
+    : text.match(/\b(\d{10})\b/)?.[1] || ''
 
-  // GLA rate — look for "Rate:" near "1.46" or just the pattern
-  const glaRateMatch = text.match(/(?:rate|Rate)[:\s]+([\d.]+)%/)
-  const glaRate = glaRateMatch?.[1] ||
-    find('Rate:').replace(/[%\s]/g,'') || ''
+  // GLA rate — specifically "1.46%" pattern in the GLA table row
+  // The table has: "Category 1  3x  n/a  1.46%"
+  const glaRateMatch = text.match(/(?:3x|salary)[\s\w/a]+?([\d.]+)%/i) ||
+                       text.match(/(?:group life|gla)[\s\S]{0,200}?([\d]+\.[\d]+)%/i)
+  const glaRate = glaRateMatch?.[1] || ''
 
-  const freeCoverRaw = find('Free cover limit:')
+  const freeCoverRaw = find('Free cover limit')
   const freeCoverLimit = freeCoverRaw.replace(/[R\s,]/g,'') || ''
-
-  const expiryAgeRaw = find('Benefit expiry age:')
-  const expiryAge = expiryAgeRaw.match(/\d+/)?.[0] || '65'
-
-  const globalEdProt = find('Global Education Protector:')
+  const expiryAge = (find('Benefit expiry age') || '65').match(/\d+/)?.[0] || '65'
+  const globalEdProt = find('Global Education Protector')
   const educBenefit  = lower.includes('education benefit')
   const mortgageProt = lower.includes('mortgage protector')
 
-  // ── PHI / Disability ──────────────────────────────────────────────────────
-  // "Total rate for income disability benefit: 1.42%"
-  const phiRateMatch = text.match(/total\s+rate\s+for\s+income\s+disability\s+benefit[:\s]+([\d.]+)%/i) ||
-                       text.match(/income\s+disability.*?([\d.]+)%/i)
+  // ── PHI ───────────────────────────────────────────────────────────────────
+  const phiRateMatch = text.match(/total\s+rate\s+for\s+income\s+disability\s+benefit[:\s]+([\d.]+)%/i)
   const phiRate = phiRateMatch?.[1] || ''
-
-  const waitingRaw  = find('Waiting period:')
-  const waitingMonths = waitingRaw.match(/\d+/)?.[0] || '3'
-
-  const escalationRaw = find('Escalation rate:')
-  const escalation = escalationRaw.match(/[\d.]+/)?.[0] || '5'
-
-  const contribProtRaw = find('Contribution Protector:')
-  const contribProt = contribProtRaw.match(/\d+/)?.[0] || '12'
+  const waitingMonths  = (find('Waiting period') || '3 months').match(/\d+/)?.[0] || '3'
+  const escalation     = (find('Escalation rate') || '5').match(/[\d.]+/)?.[0] || '5'
+  const contribProt    = (find('Contribution Protector') || '12 months').match(/\d+/)?.[0] || '12'
 
   // ── Medical Aid ───────────────────────────────────────────────────────────
-  // "Scheme name: Discovery Health" — may appear twice (GLA + Medical)
-  // Find ALL occurrences and take the last one (medical aid section)
-  const schemeNameMatches = [...lower.matchAll(/scheme name[:\s]+([^\n]+)/gi)]
-  const medScheme = schemeNameMatches.length > 1
-    ? text.slice(schemeNameMatches[schemeNameMatches.length-1].index).split('\n')[0].replace(/scheme name[:\s]+/i,'').trim()
-    : find('Scheme name:') || ''
-
-  // Same for scheme number — take the second occurrence for medical
-  const schemeNoMatches = [...lower.matchAll(/scheme number[:\s]+([^\n]+)/gi)]
-  const medSchemeNo = schemeNoMatches.length > 1
-    ? text.slice(schemeNoMatches[schemeNoMatches.length-1].index).split('\n')[0].replace(/scheme number[:\s]+/i,'').trim()
+  // Take the LAST "Scheme name:" occurrence — that's Discovery Health
+  const schemeNameAll = [...text.matchAll(/scheme name[:\s]+([^\n]+)/gi)]
+  const medScheme = schemeNameAll.length > 0
+    ? schemeNameAll[schemeNameAll.length-1][0].replace(/scheme name[:\s]+/i,'').trim()
+    : ''
+  // Take the LAST "Scheme number:" — that's 4342893
+  const medSchemeNo = schemeNoAll.length > 1
+    ? schemeNoAll[schemeNoAll.length-1][0].replace(/scheme number[:\s]+/i,'').trim().replace(/\D/g,'')
     : ''
 
-  const billingMethod = find('Billing method:')
-  const billingDue    = find('Billing due date (to scheme):', 'Billing due date:','Billing due date') ||
-    text.match(/(?:billing due date)[^0-9]*(\d+(?:th|st|nd|rd)?)/i)?.[1] || ''
-  const paymentMethod = find('Payment method:')
-  const compulsory    = lower.includes('compulsory: yes') || lower.includes('compulsory:\nyes') ||
-    lower.includes('compulsory: yes, or')
+  const billingMethod  = find('Billing method')
+  const billingDue     = find('Billing due date (to scheme)', 'Billing due date') ||
+    text.match(/billing due date[^0-9]*(\d+(?:th|st|nd|rd)?)/i)?.[1] || ''
+  const paymentMethod  = find('Payment method')
+  const compulsory     = lower.includes('compulsory: yes')
 
-  // ── Build profile ─────────────────────────────────────────────────────────
+  // ── Profile object ────────────────────────────────────────────────────────
   const profile = {
     employerName,
     payrollContact,
     payrollPhone,
     payrollEmail,
-    effectiveDate: startDate ? startDate.slice(0,10) : new Date().toISOString().split('T')[0],
-    retirementAge: parseInt(retireAge) || 65,
-    billingMethod:  billingMethod || 'Arrears',
-    billingDueDate: billingDue   || '14th',
-    paymentMethod:  paymentMethod || 'Debit Order',
-
+    effectiveDate:  startDate ? startDate.slice(0,20) : new Date().toISOString().split('T')[0],
+    retirementAge:  parseInt(retireAge) || 65,
+    billingMethod:  billingMethod  || 'Arrears',
+    billingDueDate: billingDue     || '14th',
+    paymentMethod:  paymentMethod  || 'Debit Order',
     retirementFund: {
-      name:                  fundName,
+      name:                 fundName,
       fundCode,
-      administrator:         fundAdmin,
-      normalRetirementAge:   parseInt(retireAge) || 65,
-      administrationCost:    adminCost ? parseFloat(adminCost.replace(/[R,\s]/g,'')) : 0,
+      administrator:        fundAdmin,
+      normalRetirementAge:  parseInt(retireAge) || 65,
+      administrationCost:   adminCost ? parseFloat(adminCost.replace(/[R,\s]/g,'')) : 0,
       contributionCategories: catRows,
     },
-
     groupLife: {
-      administrator:         fundAdmin || 'Discovery',
+      administrator:           fundAdmin || 'Discovery',
       schemeNumber,
-      benefit:               '3 × Annual Salary',
-      rate:                  glaRate ? parseFloat(glaRate) : 0,
-      educationBenefit:      educBenefit,
-      globalEducationProtector: globalEdProt,
-      mortgageProtector:     mortgageProt,
-      freeCoverLimit:        freeCoverLimit ? parseInt(freeCoverLimit) : 0,
-      benefitExpiryAge:      parseInt(expiryAge) || 65,
+      benefit:                 '3 × Annual Salary',
+      rate:                    glaRate ? parseFloat(glaRate) : 0,
+      educationBenefit:        educBenefit,
+      globalEducationProtector:globalEdProt,
+      mortgageProtector:       mortgageProt,
+      freeCoverLimit:          freeCoverLimit ? parseInt(freeCoverLimit) : 0,
+      benefitExpiryAge:        parseInt(expiryAge) || 65,
     },
-
     disability: {
-      rate:                      phiRate ? parseFloat(phiRate) : 0,
-      waitingPeriodMonths:       parseInt(waitingMonths) || 3,
-      escalationPercent:         parseFloat(escalation) || 5,
-      benefitExpiryAge:          parseInt(expiryAge) || 65,
-      contributionProtectorMonths: parseInt(contribProt) || 12,
+      rate:                       phiRate ? parseFloat(phiRate) : 0,
+      waitingPeriodMonths:        parseInt(waitingMonths) || 3,
+      escalationPercent:          parseFloat(escalation) || 5,
+      benefitExpiryAge:           parseInt(expiryAge) || 65,
+      contributionProtectorMonths:parseInt(contribProt) || 12,
     },
-
     medicalAid: {
-      scheme:        medScheme || find('Scheme name:'),
-      schemeNumber:  medSchemeNo || schemeNumber,
+      scheme:        medScheme,
+      schemeNumber:  medSchemeNo,
       billingMethod: billingMethod || 'Arrears',
       billingDueDate:billingDue   || '14th',
       paymentMethod: paymentMethod || 'Debit Order',
       compulsory,
     },
-
     funeralCover: null,
   }
 
-  // ── Extraction score ──────────────────────────────────────────────────────
-  const checks = {
-    employerName, payrollContact, fundName, fundCode, fundAdmin,
-    schemeNumber, glaRate, phiRate, billingMethod, payrollEmail,
-    catRows: catRows.length > 0 ? 'yes' : '',
-    medScheme,
+  // ── Debug metadata (shown in extraction panel) ────────────────────────────
+  const debugFields = {
+    'Employer Name':      { value: employerName,    source: 'Employer name:' },
+    'Payroll Contact':    { value: payrollContact,  source: 'Payroll Contact section' },
+    'Phone':              { value: payrollPhone,    source: 'Contact number:' },
+    'Email':              { value: payrollEmail,    source: 'Email address:' },
+    'Fund Name':          { value: fundName,        source: 'Fund name:' },
+    'Fund Code':          { value: fundCode,        source: 'Fund code:' },
+    'Fund Administrator': { value: fundAdmin,       source: 'Administrator:' },
+    'Retirement Age':     { value: retireAge,       source: 'Normal retirement age:' },
+    'GLA Scheme No.':     { value: schemeNumber,    source: 'Scheme number: (1st)' },
+    'GLA Rate':           { value: glaRate ? glaRate+'%' : '', source: 'GLA table rate' },
+    'PHI Rate':           { value: phiRate ? phiRate+'%' : '', source: 'Total rate for income disability' },
+    'Contribution Cats':  { value: catRows.length > 0 ? catRows.length+' categories' : '', source: 'Category N X% Y%' },
+    'Medical Aid':        { value: medScheme,       source: 'Scheme name: (last)' },
+    'Med Scheme No.':     { value: medSchemeNo,     source: 'Scheme number: (last)' },
+    'Billing Method':     { value: billingMethod,   source: 'Billing method:' },
+    'Billing Due Date':   { value: billingDue,      source: 'Billing due date:' },
+    'Payment Method':     { value: paymentMethod,   source: 'Payment method:' },
   }
-  const extracted = Object.values(checks).filter(v => v && String(v).length > 0).length
 
-  return { profile, employerName, extracted, totalFields: Object.keys(checks).length }
+  const extracted = Object.values(debugFields).filter(f => f.value && f.value.length > 0).length
+  return { profile, employerName, extracted, totalFields: Object.keys(debugFields).length, debugFields, rawLines: lines }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -404,41 +399,34 @@ function AddEmployerModal({ onClose, onAdd, existingCount }) {
   })
   const set = (k,v) => setForm(f => ({...f, [k]:v}))
 
-  function handleFileUpload(file) {
+  async function handleFileUpload(file) {
     if (!file) return
     setUpName(file.name)
     setUploading(true)
-    setUpPct(0)
+    setUpPct(10)
 
-    const reader = new FileReader()
-    reader.onload = e => {
-      let pct = 0
-      const iv = setInterval(() => {
-        pct += 25
-        setUpPct(Math.min(pct, 85))
-        if (pct >= 85) {
-          clearInterval(iv)
-          const rawText = e.target.result
-          const result  = parseInfoPack(rawText)
-          setResult(result)
-          setUpPct(100)
-          setUploading(false)
-          setUpDone(true)
-          // Pre-fill form
-          setForm(f => ({
-            ...f,
-            name:    result.employerName || f.name,
-            number:  f.number || `EMP-${String(existingCount + 1).padStart(3,'0')}`,
-            contact: result.profile.payrollContact || f.contact,
-            phone:   result.profile.payrollPhone   || f.phone,
-            email:   result.profile.payrollEmail   || f.email,
-          }))
-        }
-      }, 150)
+    try {
+      setUpPct(30)
+      const { text, method } = await readFileForExtraction(file)
+      setUpPct(70)
+      const result = parseInfoPack(text)
+      result.extractionMethod = method
+      setUpPct(100)
+      setResult(result)
+      setUploading(false)
+      setUpDone(true)
+      setForm(f => ({
+        ...f,
+        name:    result.employerName || f.name,
+        number:  f.number || `EMP-${String(existingCount + 1).padStart(3,'0')}`,
+        contact: result.profile.payrollContact || f.contact,
+        phone:   result.profile.payrollPhone   || f.phone,
+        email:   result.profile.payrollEmail   || f.email,
+      }))
+    } catch(err) {
+      setUploading(false)
+      alert('Could not read file: ' + err.message)
     }
-    reader.onerror = () => { setUploading(false); alert('Could not read file.') }
-    // MUST use readAsBinaryString for PDFs — readAsText mangles binary encodings
-    reader.readAsBinaryString(file)
   }
 
   function handleSubmit() {
@@ -545,44 +533,61 @@ function AddEmployerModal({ onClose, onAdd, existingCount }) {
           {uploadDone && parseResult && (
             <div>
               {/* Extraction summary banner */}
-              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 14px', marginBottom:16, display:'flex', gap:12, alignItems:'center' }}>
-                <span style={{ fontSize:24 }}>✅</span>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:T.green }}>
-                    Info pack processed — {parseResult.extracted} of {parseResult.totalFields} fields extracted
+              <div style={{ background: parseResult.extracted >= parseResult.totalFields * 0.8 ? '#f0fdf4' : '#fffbeb', border: `1px solid ${parseResult.extracted >= parseResult.totalFields * 0.8 ? '#bbf7d0' : '#fde68a'}`, borderRadius:10, padding:'12px 14px', marginBottom:14, display:'flex', gap:12, alignItems:'center' }}>
+                <span style={{ fontSize:24 }}>{parseResult.extracted >= parseResult.totalFields * 0.8 ? '✅' : '⚠️'}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color: parseResult.extracted >= parseResult.totalFields * 0.8 ? T.green : '#92400e' }}>
+                    {parseResult.extracted} of {parseResult.totalFields} fields extracted
+                    {parseResult.extractionMethod && <span style={{ fontSize:10, fontWeight:400, color:T.gray, marginLeft:8 }}>via {parseResult.extractionMethod}</span>}
                   </div>
-                  <div style={{ fontSize:11, color:'#374151', marginTop:2 }}>
-                    {uploadedName} · Review and complete any missing fields below, then save.
+                  <div style={{ fontSize:11, color:'#374151', marginTop:2 }}>{uploadedName} · Review fields below, correct any errors, then save.</div>
+                </div>
+                {/* Progress bar */}
+                <div style={{ width:80 }}>
+                  <div style={{ height:6, background:'#e5e7eb', borderRadius:3, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${Math.round((parseResult.extracted/parseResult.totalFields)*100)}%`, background: parseResult.extracted >= parseResult.totalFields * 0.8 ? T.green : T.amber, borderRadius:3 }}/>
                   </div>
+                  <div style={{ fontSize:10, color:T.gray, textAlign:'center', marginTop:2 }}>{Math.round((parseResult.extracted/parseResult.totalFields)*100)}%</div>
                 </div>
               </div>
 
-              {/* Extracted fields preview */}
-              <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:10 }}>Extracted from document</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-                  {[
-                    ['Employer',          parseResult.profile.employerName],
-                    ['Payroll Contact',   parseResult.profile.payrollContact],
-                    ['Fund Name',         parseResult.profile.retirementFund?.name],
-                    ['Fund Code',         parseResult.profile.retirementFund?.fundCode],
-                    ['Fund Admin',        parseResult.profile.retirementFund?.administrator],
-                    ['GLA Scheme No.',    parseResult.profile.groupLife?.schemeNumber],
-                    ['GLA Rate',          parseResult.profile.groupLife?.rate ? `${parseResult.profile.groupLife.rate}%` : ''],
-                    ['PHI Rate',          parseResult.profile.disability?.rate ? `${parseResult.profile.disability.rate}%` : ''],
-                    ['Medical Aid',       parseResult.profile.medicalAid?.scheme],
-                    ['Contribution Cats', parseResult.profile.retirementFund?.contributionCategories?.length ? `${parseResult.profile.retirementFund.contributionCategories.length} categories` : ''],
-                    ['Billing Method',    parseResult.profile.billingMethod],
-                    ['Retirement Age',    parseResult.profile.retirementAge ? `Age ${parseResult.profile.retirementAge}` : ''],
-                  ].map(([l,v]) => (
-                    <div key={l} style={{ fontSize:11 }}>
-                      <div style={{ color:T.gray, fontSize:9, fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>{l}</div>
-                      <div style={{ color:v?T.text:'#d1d5db', fontWeight:v?600:400, fontStyle:v?'normal':'italic' }}>
-                        {v || 'Not found'}
-                        {v && <span style={{ color:T.green, marginLeft:4 }}>✓</span>}
-                      </div>
-                    </div>
-                  ))}
+              {/* Debug panel — field by field */}
+              <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:10, overflow:'hidden', marginBottom:14 }}>
+                <div style={{ padding:'9px 14px', background:'#f9fafb', borderBottom:`1px solid ${T.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:T.text }}>🔬 Extraction Debug — Field Map</span>
+                  <span style={{ fontSize:10, color:T.gray }}>Green = extracted · Grey = not found</span>
+                </div>
+                <div style={{ overflowX:'auto' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                    <thead><tr style={{ background:'#f9fafb' }}>
+                      {['Field','Extracted Value','Source Label','Confidence'].map(h=>(
+                        <th key={h} style={{ padding:'7px 12px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {Object.entries(parseResult.debugFields || {}).map(([field, meta]) => {
+                        const found = meta.value && meta.value.length > 0
+                        const conf  = found ? 95 : 0
+                        return (
+                          <tr key={field} style={{ borderBottom:'1px solid #f9fafb', background: found ? '#fff' : '#fffafa' }}>
+                            <td style={{ padding:'7px 12px', fontSize:12, fontWeight:600, color:T.text }}>{field}</td>
+                            <td style={{ padding:'7px 12px', fontSize:12, fontWeight:700, color: found ? T.text : '#d1d5db', fontStyle: found ? 'normal' : 'italic' }}>
+                              {meta.value || '—'}
+                            </td>
+                            <td style={{ padding:'7px 12px', fontSize:10, color:T.gray }}>{meta.source}</td>
+                            <td style={{ padding:'7px 12px' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                <div style={{ width:40, height:4, background:'#f3f4f6', borderRadius:2, overflow:'hidden' }}>
+                                  <div style={{ height:'100%', width:`${conf}%`, background: found ? T.green : '#f3f4f6', borderRadius:2 }}/>
+                                </div>
+                                <span style={{ fontSize:10, fontWeight:700, color: found ? T.green : '#d1d5db' }}>{conf}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
