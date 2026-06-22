@@ -63,6 +63,8 @@ export default function App() {
     setEmployers(prev => [...prev, emp])
     if (profile) setBenefitProfiles(prev => ({...prev, [emp.id]: profile}))
   }
+
+  function addBillingTask(bt) {
     // Enrich with Phase 4 billing engine fields
     const enriched = {
       ...bt,
