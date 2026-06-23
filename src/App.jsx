@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import CasesPage from './pages/CasesPage.jsx'
 import CaseDetail from './pages/CaseDetail.jsx'
 import BillingWorkbench from './pages/BillingWorkbench.jsx'
+import BillingEngine from './pages/BillingEngine.jsx'
 import EmployersPage from './pages/EmployersPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import UserManagement from './pages/admin/UserManagement.jsx'
@@ -158,7 +159,7 @@ export default function App() {
             <CasesPage {...sharedProps} onOpenCase={setOpenCase} onAddCase={addCase} onAddBillingTask={addBillingTask} initialFilter={pageFilter} workspace="internal"/>
           )}
           {page==='billing' && (
-            <BillingWorkbench {...sharedProps} onUpdateBilling={setBillingTasks}/>
+            <BillingEngine billingTasks={billingTasks} employers={employers} users={users} currentUser={user}/>
           )}
           {page==='email_intake' && (isGM || role==='administrator') && (
             <EmailIntake
