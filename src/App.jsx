@@ -35,7 +35,8 @@ export default function App() {
   const [users, setUsers]             = useState(INITIAL_USERS)
   const [openCase, setOpenCase]       = useState(null)
   const [members, setMembers]         = useState([])
-  const [inductionCase, setInduction] = useState(null)  // case that triggers induction
+  const [inductionCase, setInduction] = useState(null)
+  const [selectedBenefitEmp, setSelectedBenefitEmp] = useState(null)
 
   // Load persisted employers + benefit profiles from Supabase on login
   useEffect(() => {
@@ -166,12 +167,17 @@ export default function App() {
               onCaseCreated={c => { addCase(c); navigate('cases') }}
             />
           )}
-          {page==='employers'  && <EmployersPage {...sharedProps} onNav={navigate} onAddEmployer={addEmployer}/>}
+          {page==='employers' && (
+            <EmployersPage {...sharedProps} onNav={navigate} onAddEmployer={addEmployer}
+              onOpenBenefitProfile={emp => { setSelectedBenefitEmp(emp); navigate('benefit_profiles') }}
+            />
+          )}
           {page==='benefit_profiles' && (isGM || role==='administrator') && (
             <EmployerBenefitProfiles
               employers={employers}
               benefitProfiles={benefitProfiles}
               currentUser={user}
+              initialEmployer={selectedBenefitEmp}
               onUpdateProfile={(empId, profile) => {
                 setBenefitProfiles(prev => ({...prev, [empId]: profile}))
                 saveBenefitProfile(empId, profile)

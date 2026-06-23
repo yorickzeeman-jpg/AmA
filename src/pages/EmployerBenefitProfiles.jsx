@@ -11,12 +11,12 @@ function StatCard({ icon, label, value, sub, color, mono, alert }) {
   return (
     <div style={{ background:'#fff', borderRadius:12, padding:'16px 18px', border:`1.5px solid ${alert?'#fde68a':color+'25'}`, display:'flex', flexDirection:'column', gap:4, position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${color},${color}88)` }}/>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-        <span style={{ fontSize:22 }}>{icon}</span>
-        {alert && <span style={{ fontSize:10, fontWeight:700, color:'#92400e', background:'#fef3c7', padding:'2px 8px', borderRadius:20 }}>⚠ {alert}</span>}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:2 }}>
+        <span style={{ fontSize:9, fontWeight:800, color:color, background:color+'15', padding:'2px 7px', borderRadius:6, letterSpacing:'0.5px' }}>{icon}</span>
+        {alert && <span style={{ fontSize:10, fontWeight:700, color:'#92400e', background:'#fef3c7', padding:'2px 8px', borderRadius:20 }}>UW REQUIRED</span>}
       </div>
-      <div style={{ fontSize:11, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.5px' }}>{label}</div>
-      <div style={{ fontSize:18, fontWeight:800, color, fontFamily:mono?'monospace':'inherit', lineHeight:1.2 }}>{value||'—'}</div>
+      <div style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.5px' }}>{label}</div>
+      <div style={{ fontSize:16, fontWeight:800, color, fontFamily:mono?'monospace':'inherit', lineHeight:1.2 }}>{value||'—'}</div>
       {sub && <div style={{ fontSize:11, color:T.gray }}>{sub}</div>}
     </div>
   )
@@ -51,9 +51,9 @@ function Badge({ label, active }) {
 function SectionCard({ title, icon, color, children, action }) {
   return (
     <div style={{ background:'#fff', borderRadius:12, border:`1px solid ${T.border}`, overflow:'hidden', marginBottom:16 }}>
-      <div style={{ padding:'13px 18px', background:`linear-gradient(135deg,${color}15,${color}05)`, borderBottom:`1px solid ${color}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div style={{ padding:'13px 18px', background:`linear-gradient(135deg,${color}12,${color}04)`, borderBottom:`1px solid ${color}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-          <span style={{ fontSize:20 }}>{icon}</span>
+          <span style={{ fontSize:9, fontWeight:800, color, background:color+'18', padding:'3px 8px', borderRadius:6, letterSpacing:'0.5px' }}>{icon}</span>
           <span style={{ fontSize:14, fontWeight:700, color }}>{title}</span>
         </div>
         {action}
@@ -76,7 +76,7 @@ function UnderwritingCheck({ salary, glaRate, freeCoverLimit, benefit }) {
   return (
     <div style={{ background:requiresUW?'#fff7ed':'#f0fdf4', border:`1.5px solid ${requiresUW?'#fed7aa':'#bbf7d0'}`, borderRadius:10, padding:'12px 16px', marginTop:12 }}>
       <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-        <span style={{ fontSize:22 }}>{requiresUW?'⚠️':'✅'}</span>
+        <span style={{ fontSize:20, fontWeight:800, color:requiresUW?'#c2410c':T.green }}>{requiresUW ? '!' : '✓'}</span>
         <div>
           <div style={{ fontSize:13, fontWeight:700, color:requiresUW?'#c2410c':T.green, marginBottom:4 }}>
             {requiresUW ? 'Underwriting Required' : 'Within Free Cover Limit'}
@@ -108,8 +108,8 @@ function EField({ label, children, wide }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═════════════════════════════════════════════════════════════════════════════
-export default function EmployerBenefitProfiles({ employers, benefitProfiles, currentUser, onUpdateProfile }) {
-  const [selectedEmp, setSelectedEmp] = useState(null)
+export default function EmployerBenefitProfiles({ employers, benefitProfiles, currentUser, onUpdateProfile, initialEmployer }) {
+  const [selectedEmp, setSelectedEmp] = useState(initialEmployer || null)
   const [editing, setEditing]         = useState(false)
   const [draft, setDraft]             = useState(null)
   const [activeTab, setTab]           = useState('overview')
@@ -140,7 +140,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
 
   const tabs = ['overview','retirement_fund','group_life','disability','medical_aid','funeral_cover']
   const tabLabels = { overview:'Overview', retirement_fund:'Retirement Fund', group_life:'Group Life', disability:'Disability', medical_aid:'Medical Aid', funeral_cover:'Funeral Cover' }
-  const tabIcons  = { overview:'🏢', retirement_fund:'🏦', group_life:'🛡️', disability:'♿', medical_aid:'🏥', funeral_cover:'🏛️' }
+  const tabIcons  = { overview:'OVR', retirement_fund:'RF', group_life:'GLA', disability:'PHI', medical_aid:'MED', funeral_cover:'FUN' }
 
   return (
     <div style={{ display:'flex', gap:0, height:'100%', animation:'fadeIn .3s ease' }}>
@@ -209,13 +209,13 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {/* Benefit pills */}
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 {[
-                  [!!profile?.retirementFund?.name,  '🏦', profile?.retirementFund?.name||'Retirement Fund'],
-                  [!!profile?.groupLife?.schemeNumber,'🛡️', `GLA ${profile?.groupLife?.rate||0}%`],
-                  [!!profile?.disability?.rate,       '♿', `PHI ${profile?.disability?.rate||0}%`],
-                  [!!profile?.medicalAid?.scheme,     '🏥', profile?.medicalAid?.scheme],
-                ].map(([active, icon, label], i) => (
+                  [!!profile?.retirementFund?.name,   profile?.retirementFund?.name||'Retirement Fund'],
+                  [!!profile?.groupLife?.schemeNumber, `GLA ${profile?.groupLife?.rate||0}%`],
+                  [!!profile?.disability?.rate,        `PHI ${profile?.disability?.rate||0}%`],
+                  [!!profile?.medicalAid?.scheme,      profile?.medicalAid?.scheme],
+                ].map(([active, label], i) => (
                   <span key={i} style={{ fontSize:11, fontWeight:600, padding:'4px 12px', borderRadius:20, background:active?'rgba(255,255,255,0.2)':'rgba(255,255,255,0.06)', color:active?'#fff':'rgba(255,255,255,0.3)', border:`1px solid ${active?'rgba(255,255,255,0.3)':'rgba(255,255,255,0.1)'}` }}>
-                    {icon} {label}
+                    {label}
                   </span>
                 ))}
               </div>
@@ -225,8 +225,8 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
             <div style={{ background:'#fff', borderBottom:`1px solid ${T.border}`, display:'flex', overflowX:'auto', paddingLeft:8 }}>
               {tabs.map(t => (
                 <button key={t} onClick={()=>setTab(t)}
-                  style={{ padding:'12px 16px', background:'none', border:'none', borderBottom:activeTab===t?`2px solid ${T.orange}`:'2px solid transparent', color:activeTab===t?T.orange:T.gray, fontWeight:activeTab===t?700:400, fontSize:12, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', marginBottom:-1, display:'flex', alignItems:'center', gap:5 }}>
-                  {tabIcons[t]} {tabLabels[t]}
+                  style={{ padding:'12px 16px', background:'none', border:'none', borderBottom:activeTab===t?`2px solid ${T.orange}`:'2px solid transparent', color:activeTab===t?T.orange:T.gray, fontWeight:activeTab===t?700:400, fontSize:12, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', marginBottom:-1, display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:8, fontWeight:800, color:activeTab===t?T.orange:'#9ca3af', background:activeTab===t?T.orangeL:'#f3f4f6', padding:'2px 5px', borderRadius:4 }}>{tabIcons[t]}</span> {tabLabels[t]}
                 </button>
               ))}
             </div>
@@ -239,16 +239,16 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                 <div>
                   {/* Key metrics grid */}
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12, marginBottom:20 }}>
-                    <StatCard icon="🏦" label="Retirement Fund"  value={profile?.retirementFund?.name||'—'}          color={T.blue}   sub={profile?.retirementFund?.fundCode}/>
-                    <StatCard icon="🛡️" label="GLA Rate"         value={profile?.groupLife?.rate?`${profile.groupLife.rate}%`:'—'} color="#059669" sub={`Scheme ${profile?.groupLife?.schemeNumber||'—'}`}/>
-                    <StatCard icon="♿" label="PHI Rate"          value={profile?.disability?.rate?`${profile.disability.rate}%`:'—'} color={T.amber} sub={`${profile?.disability?.waitingPeriodMonths||3} month waiting period`}/>
-                    <StatCard icon="🏥" label="Medical Aid"       value={profile?.medicalAid?.scheme||'—'}             color={T.red}    sub={`Scheme ${profile?.medicalAid?.schemeNumber||'—'}`}/>
-                    <StatCard icon="💰" label="Admin Cost"        value={profile?.retirementFund?.administrationCost?`R${profile.retirementFund.administrationCost}/member`:'—'} color={T.purple} mono/>
-                    <StatCard icon="🎂" label="Retirement Age"    value={profile?.retirementAge?`Age ${profile.retirementAge}`:'—'} color={T.navy}/>
+                    <StatCard icon="RF" label="Retirement Fund"  value={profile?.retirementFund?.name||'—'}          color={T.blue}   sub={profile?.retirementFund?.fundCode}/>
+                    <StatCard icon="GLA" label="GLA Rate"         value={profile?.groupLife?.rate?`${profile.groupLife.rate}%`:'—'} color="#059669" sub={`Scheme ${profile?.groupLife?.schemeNumber||'—'}`}/>
+                    <StatCard icon="PHI" label="PHI Rate"          value={profile?.disability?.rate?`${profile.disability.rate}%`:'—'} color={T.amber} sub={`${profile?.disability?.waitingPeriodMonths||3} month waiting period`}/>
+                    <StatCard icon="MED" label="Medical Aid"       value={profile?.medicalAid?.scheme||'—'}             color={T.red}    sub={`Scheme ${profile?.medicalAid?.schemeNumber||'—'}`}/>
+                    <StatCard icon="CAT" label="Admin Cost"        value={profile?.retirementFund?.administrationCost?`R${profile.retirementFund.administrationCost}/member`:'—'} color={T.purple} mono/>
+                    <StatCard icon="AGE" label="Retirement Age"    value={profile?.retirementAge?`Age ${profile.retirementAge}`:'—'} color={T.navy}/>
                   </div>
 
                   {/* Underwriting test tool */}
-                  <SectionCard title="Underwriting Check" icon="⚖️" color={T.orange}>
+                  <SectionCard title="Underwriting Check" icon="UW" color={T.orange}>
                     <div style={{ fontSize:12, color:T.gray, marginBottom:10, lineHeight:1.6 }}>
                       Enter a member's monthly salary to check whether their GLA benefit exceeds the free cover limit and requires underwriting.
                     </div>
@@ -270,7 +270,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
 
                   {/* Contribution categories */}
                   {profile?.retirementFund?.contributionCategories?.length > 0 && (
-                    <SectionCard title="Contribution Categories" icon="💰" color="#059669">
+                    <SectionCard title="Contribution Categories" icon="CAT" color="#059669">
                       <div style={{ overflowX:'auto' }}>
                         <table style={{ width:'100%', borderCollapse:'collapse' }}>
                           <thead>
@@ -302,7 +302,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                   )}
 
                   {/* Billing rules */}
-                  <SectionCard title="Billing Rules" icon="💳" color={T.purple}>
+                  <SectionCard title="Billing Rules" icon="BILL" color={T.purple}>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:12 }}>
                       {[
                         ['Billing Method',   profile?.billingMethod  ||'—'],
@@ -323,7 +323,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {/* ── RETIREMENT FUND ── */}
               {activeTab === 'retirement_fund' && (
                 editing ? (
-                  <SectionCard title="Retirement Fund" icon="🏦" color={T.blue}>
+                  <SectionCard title="Retirement Fund" icon="RF" color={T.blue}>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                       <EField label="Fund Name" wide><input value={draft?.retirementFund?.name||''} onChange={e=>setD('retirementFund.name',e.target.value)} style={inputSt}/></EField>
                       <EField label="Fund Code"><input value={draft?.retirementFund?.fundCode||''} onChange={e=>setD('retirementFund.fundCode',e.target.value)} style={inputSt}/></EField>
@@ -347,14 +347,14 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                 ) : (
                   <div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:20 }}>
-                      <StatCard icon="🏦" label="Fund Name"          value={profile?.retirementFund?.name}         color={T.blue}   wide/>
-                      <StatCard icon="🔢" label="Fund Code"          value={profile?.retirementFund?.fundCode}     color={T.blue}   mono/>
-                      <StatCard icon="👤" label="Administrator"      value={profile?.retirementFund?.administrator} color={T.navy}/>
-                      <StatCard icon="🎂" label="Retirement Age"     value={profile?.retirementFund?.normalRetirementAge?`Age ${profile.retirementFund.normalRetirementAge}`:'—'} color={T.navy}/>
-                      <StatCard icon="💰" label="Administration Cost" value={profile?.retirementFund?.administrationCost?`R${profile.retirementFund.administrationCost}/member`:'—'} color={T.purple} mono/>
+                      <StatCard icon="RF" label="Fund Name"          value={profile?.retirementFund?.name}         color={T.blue}   wide/>
+                      <StatCard icon="NO." label="Fund Code"          value={profile?.retirementFund?.fundCode}     color={T.blue}   mono/>
+                      <StatCard icon="ADM" label="Administrator"      value={profile?.retirementFund?.administrator} color={T.navy}/>
+                      <StatCard icon="AGE" label="Retirement Age"     value={profile?.retirementFund?.normalRetirementAge?`Age ${profile.retirementFund.normalRetirementAge}`:'—'} color={T.navy}/>
+                      <StatCard icon="CAT" label="Administration Cost" value={profile?.retirementFund?.administrationCost?`R${profile.retirementFund.administrationCost}/member`:'—'} color={T.purple} mono/>
                     </div>
                     {profile?.retirementFund?.contributionCategories?.length > 0 && (
-                      <SectionCard title="Contribution Categories" icon="💰" color="#059669">
+                      <SectionCard title="Contribution Categories" icon="CAT" color="#059669">
                         <table style={{ width:'100%', borderCollapse:'collapse' }}>
                           <thead><tr style={{ borderBottom:'2px solid #f3f4f6' }}>{['Category','Employer %','Employee %','Total %'].map(h=><th key={h} style={{ padding:'8px 12px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase' }}>{h}</th>)}</tr></thead>
                           <tbody>{profile.retirementFund.contributionCategories.map((cat,i)=>(
@@ -375,7 +375,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {/* ── GROUP LIFE ── */}
               {activeTab === 'group_life' && (
                 editing ? (
-                  <SectionCard title="Group Life Assurance" icon="🛡️" color="#059669">
+                  <SectionCard title="Group Life Assurance" icon="GLA" color="#059669">
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                       <EField label="Administrator"><input value={draft?.groupLife?.administrator||''} onChange={e=>setD('groupLife.administrator',e.target.value)} style={inputSt}/></EField>
                       <EField label="Scheme Number"><input value={draft?.groupLife?.schemeNumber||''} onChange={e=>setD('groupLife.schemeNumber',e.target.value)} style={inputSt}/></EField>
@@ -389,18 +389,18 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                 ) : (
                   <div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12, marginBottom:20 }}>
-                      <StatCard icon="🏢" label="Administrator"   value={profile?.groupLife?.administrator}         color={T.navy}/>
-                      <StatCard icon="🔢" label="Scheme Number"  value={profile?.groupLife?.schemeNumber}          color={T.blue}   mono/>
-                      <StatCard icon="📈" label="Benefit"        value={profile?.groupLife?.benefit}               color="#059669"/>
-                      <StatCard icon="💲" label="GLA Rate"       value={profile?.groupLife?.rate?`${profile.groupLife.rate}%`:'—'} color="#059669" highlight/>
-                      <StatCard icon="🔒" label="Free Cover Limit" value={profile?.groupLife?.freeCoverLimit?`R${profile.groupLife.freeCoverLimit.toLocaleString()}`:'—'} color={T.orange} alert={profile?.groupLife?.freeCoverLimit?'Underwriting above this':''}/>
-                      <StatCard icon="🎂" label="Expiry Age"     value={profile?.groupLife?.benefitExpiryAge?`Age ${profile.groupLife.benefitExpiryAge}`:'—'} color={T.navy}/>
-                      <StatCard icon="🎓" label="Ed. Protector"  value={profile?.groupLife?.globalEducationProtector||'—'} color={T.purple}/>
-                      <StatCard icon="🏠" label="Mortgage Prot." value={profile?.groupLife?.mortgageProtector?'Yes':'No'} color={T.blue}/>
+                      <StatCard icon="ORG" label="Administrator"   value={profile?.groupLife?.administrator}         color={T.navy}/>
+                      <StatCard icon="NO." label="Scheme Number"  value={profile?.groupLife?.schemeNumber}          color={T.blue}   mono/>
+                      <StatCard icon="BEN" label="Benefit"        value={profile?.groupLife?.benefit}               color="#059669"/>
+                      <StatCard icon="RATE" label="GLA Rate"       value={profile?.groupLife?.rate?`${profile.groupLife.rate}%`:'—'} color="#059669" highlight/>
+                      <StatCard icon="FCL" label="Free Cover Limit" value={profile?.groupLife?.freeCoverLimit?`R${profile.groupLife.freeCoverLimit.toLocaleString()}`:'—'} color={T.orange} alert={profile?.groupLife?.freeCoverLimit?'Underwriting above this':''}/>
+                      <StatCard icon="AGE" label="Expiry Age"     value={profile?.groupLife?.benefitExpiryAge?`Age ${profile.groupLife.benefitExpiryAge}`:'—'} color={T.navy}/>
+                      <StatCard icon="EDU" label="Ed. Protector"  value={profile?.groupLife?.globalEducationProtector||'—'} color={T.purple}/>
+                      <StatCard icon="MTG" label="Mortgage Prot." value={profile?.groupLife?.mortgageProtector?'Yes':'No'} color={T.blue}/>
                     </div>
 
                     {/* Underwriting check tool */}
-                    <SectionCard title="Underwriting Check" icon="⚖️" color={T.orange}>
+                    <SectionCard title="Underwriting Check" icon="UW" color={T.orange}>
                       <div style={{ fontSize:12, color:T.gray, marginBottom:10 }}>Enter a member's monthly salary to check if underwriting is required.</div>
                       <div style={{ display:'flex', gap:10, alignItems:'center' }}>
                         <div style={{ position:'relative', maxWidth:240 }}>
@@ -418,7 +418,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {/* ── DISABILITY ── */}
               {activeTab === 'disability' && (
                 editing ? (
-                  <SectionCard title="Income Disability Benefit" icon="♿" color={T.amber}>
+                  <SectionCard title="Income Disability Benefit" icon="PHI" color={T.amber}>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                       <EField label="Rate (%)"><input type="number" step="0.01" value={draft?.disability?.rate||0} onChange={e=>setD('disability.rate',+e.target.value)} style={inputSt}/></EField>
                       <EField label="Waiting Period (months)"><input type="number" value={draft?.disability?.waitingPeriodMonths||3} onChange={e=>setD('disability.waitingPeriodMonths',+e.target.value)} style={inputSt}/></EField>
@@ -429,11 +429,11 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                   </SectionCard>
                 ) : (
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
-                    <StatCard icon="💲" label="PHI Rate"              value={profile?.disability?.rate?`${profile.disability.rate}%`:'—'}            color={T.amber}/>
+                    <StatCard icon="RATE" label="PHI Rate"              value={profile?.disability?.rate?`${profile.disability.rate}%`:'—'}            color={T.amber}/>
                     <StatCard icon="⏳" label="Waiting Period"        value={profile?.disability?.waitingPeriodMonths?`${profile.disability.waitingPeriodMonths} months`:'—'} color={T.navy}/>
-                    <StatCard icon="📈" label="Escalation"            value={profile?.disability?.escalationPercent?`${profile.disability.escalationPercent}%`:'—'}           color="#059669"/>
-                    <StatCard icon="🎂" label="Expiry Age"            value={profile?.disability?.benefitExpiryAge?`Age ${profile.disability.benefitExpiryAge}`:'—'}          color={T.navy}/>
-                    <StatCard icon="🛡️" label="Contribution Protector" value={profile?.disability?.contributionProtectorMonths?`${profile.disability.contributionProtectorMonths} months`:'—'} color={T.purple}/>
+                    <StatCard icon="BEN" label="Escalation"            value={profile?.disability?.escalationPercent?`${profile.disability.escalationPercent}%`:'—'}           color="#059669"/>
+                    <StatCard icon="AGE" label="Expiry Age"            value={profile?.disability?.benefitExpiryAge?`Age ${profile.disability.benefitExpiryAge}`:'—'}          color={T.navy}/>
+                    <StatCard icon="GLA" label="Contribution Protector" value={profile?.disability?.contributionProtectorMonths?`${profile.disability.contributionProtectorMonths} months`:'—'} color={T.purple}/>
                   </div>
                 )
               )}
@@ -441,7 +441,7 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {/* ── MEDICAL AID ── */}
               {activeTab === 'medical_aid' && (
                 editing ? (
-                  <SectionCard title="Medical Aid" icon="🏥" color={T.red}>
+                  <SectionCard title="Medical Aid" icon="MED" color={T.red}>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                       <EField label="Scheme" wide><input value={draft?.medicalAid?.scheme||''} onChange={e=>setD('medicalAid.scheme',e.target.value)} style={inputSt}/></EField>
                       <EField label="Scheme Number"><input value={draft?.medicalAid?.schemeNumber||''} onChange={e=>setD('medicalAid.schemeNumber',e.target.value)} style={inputSt}/></EField>
@@ -452,12 +452,12 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
                   </SectionCard>
                 ) : (
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
-                    <StatCard icon="🏥" label="Scheme"          value={profile?.medicalAid?.scheme}              color={T.red}/>
-                    <StatCard icon="🔢" label="Scheme Number"  value={profile?.medicalAid?.schemeNumber}        color={T.blue}  mono/>
-                    <StatCard icon="💳" label="Billing Method" value={profile?.medicalAid?.billingMethod}       color={T.navy}/>
-                    <StatCard icon="📅" label="Due Date"       value={profile?.medicalAid?.billingDueDate}      color={T.navy}/>
-                    <StatCard icon="🏦" label="Payment Method" value={profile?.medicalAid?.paymentMethod}       color={T.purple}/>
-                    <StatCard icon="✓"  label="Compulsory"     value={profile?.medicalAid?.compulsory?'Yes':'No'} color={profile?.medicalAid?.compulsory?T.green:'#9ca3af'}/>
+                    <StatCard icon="MED" label="Scheme"          value={profile?.medicalAid?.scheme}              color={T.red}/>
+                    <StatCard icon="NO." label="Scheme Number"  value={profile?.medicalAid?.schemeNumber}        color={T.blue}  mono/>
+                    <StatCard icon="BILL" label="Billing Method" value={profile?.medicalAid?.billingMethod}       color={T.navy}/>
+                    <StatCard icon="DATE" label="Due Date"       value={profile?.medicalAid?.billingDueDate}      color={T.navy}/>
+                    <StatCard icon="RF" label="Payment Method" value={profile?.medicalAid?.paymentMethod}       color={T.purple}/>
+                    <StatCard icon="YES"  label="Compulsory"     value={profile?.medicalAid?.compulsory?'Yes':'No'} color={profile?.medicalAid?.compulsory?T.green:'#9ca3af'}/>
                   </div>
                 )
               )}
@@ -466,9 +466,9 @@ export default function EmployerBenefitProfiles({ employers, benefitProfiles, cu
               {activeTab === 'funeral_cover' && (
                 profile?.funeralCover ? (
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
-                    <StatCard icon="🏛️" label="Scheme"         value={profile.funeralCover.scheme}             color={T.navy}/>
-                    <StatCard icon="👤" label="Administrator"  value={profile.funeralCover.administrator}      color={T.navy}/>
-                    <StatCard icon="💰" label="Member Premium" value={`R${profile.funeralCover.memberPremium}/mo`} color={T.orange} mono/>
+                    <StatCard icon="FUN" label="Scheme"         value={profile.funeralCover.scheme}             color={T.navy}/>
+                    <StatCard icon="ADM" label="Administrator"  value={profile.funeralCover.administrator}      color={T.navy}/>
+                    <StatCard icon="CAT" label="Member Premium" value={`R${profile.funeralCover.memberPremium}/mo`} color={T.orange} mono/>
                     <StatCard icon="👨‍👩‍👧" label="Extended Family" value={profile.funeralCover.extendedFamilyAvailable?'Available':'Not Available'} color={T.green}/>
                   </div>
                 ) : (

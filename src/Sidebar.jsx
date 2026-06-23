@@ -3,26 +3,23 @@ import { Icon, Avatar } from './ui.jsx'
 
 // Workspace-aware navigation — employer users see a simpler set
 const INTERNAL_NAV = [
-  { id:'dashboard',       label:'Dashboard',        icon:'dashboard'  },
-  { id:'cases',           label:'Employer Cases',   icon:'cases'      },
-  { id:'internal_cases',  label:'Internal Cases',   icon:'audit'      },
-  { id:'email_intake',    label:'Case from Email',  icon:'send'       },
-  { id:'billing',              label:'Billing',               icon:'sla'        },
-  { id:'membership_register', label:'Membership Register',   icon:'employers'  },
-  { id:'benefit_profiles',    label:'Benefit Profiles',      icon:'employers'  },
-  { id:'employers',       label:'Employers',         icon:'employers'  },
-  { id:'reports',         label:'Reports',          icon:'reports'    },
+  { id:'dashboard',      label:'Dashboard',       icon:'dashboard' },
+  { id:'cases',          label:'Employer Cases',  icon:'cases'     },
+  { id:'internal_cases', label:'Internal Cases',  icon:'audit'     },
+  { id:'email_intake',   label:'Case from Email', icon:'send'      },
+  { id:'billing',        label:'Billing',         icon:'sla'       },
+  { id:'employers',      label:'Employers',       icon:'employers' },
+  { id:'reports',        label:'Reports',         icon:'reports'   },
 ]
 const EMPLOYER_NAV = [
   { id:'dashboard',  label:'Dashboard',      icon:'dashboard' },
   { id:'cases',      label:'My Cases',       icon:'cases'     },
 ]
 const ADMIN_NAV = [
-  { id:'admin_users',      label:'User Management',    icon:'users'     },
-  { id:'admin_casetypes',  label:'Case Type Config',   icon:'workflow'  },
-  { id:'admin_categories', label:'Categories',         icon:'filter'    },
-  { id:'admin_employers',  label:'Employers',          icon:'employers' },
-  { id:'admin_allocation', label:'Allocation Rules',   icon:'transfer'  },
+  { id:'admin_users',      label:'User Management',  icon:'users'    },
+  { id:'admin_casetypes',  label:'Case Type Config', icon:'workflow' },
+  { id:'admin_categories', label:'Categories',       icon:'filter'   },
+  { id:'admin_allocation', label:'Allocation Rules', icon:'transfer' },
 ]
 
 const ROLE_COLORS = {
