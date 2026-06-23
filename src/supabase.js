@@ -63,84 +63,58 @@ export async function getStaffProfile(email) {
   return data
 }
 
-// ── EMPLOYERS ────────────────────────────────────────────────────────────────
+// ── EMPLOYERS — localStorage persistence ─────────────────────────────────────
+const LS_EMPLOYERS    = 'aeb_employers'
+const LS_PROFILES     = 'aeb_benefit_profiles'
+
 export async function fetchEmployers() {
   try {
-    const { data, error } = await supabase
-      .from('employers')
-      .select('*')
-      .order('name')
-    if (error) {
-      console.warn('[Supabase] fetchEmployers:', error.message)
-      return null
-    }
-    // Normalise rows to match app's employer object shape
-    return (data || []).map(e => ({
-      id:         e.id,
-      name:       e.name || '',
-      number:     e.number || '',
-      industry:   e.industry || '',
-      status:     e.status || 'active',
-      members:    e.members || 0,
-      contact:    e.contact || '',
-      phone:      e.phone || '',
-      email:      e.email || '',
-      portal:     e.portal || false,
-      consultant: e.consultant || null,
-    }))
+    const stored = localStorage.getItem(LS_EMPLOYERS)
+    if (stored) return JSON.parse(stored)
+    return []
   } catch(e) {
-    console.warn('[Supabase] fetchEmployers exception:', e.message)
-    return null
+    console.warn('[Storage] fetchEmployers:', e.message)
+    return []
   }
 }
 
 export async function saveEmployer(emp) {
   try {
-    const { error } = await supabase
-      .from('employers')
-      .upsert({
-        id:         emp.id,
-        name:       emp.name,
-        number:     emp.number,
-        industry:   emp.industry,
-        status:     emp.status,
-        members:    emp.members || 0,
-        contact:    emp.contact,
-        phone:      emp.phone,
-        email:      emp.email,
-        portal:     emp.portal || false,
-        consultant: emp.consultant || null,
-      })
-    if (error) console.warn('[Supabase] saveEmployer:', error.message)
-    return !error
+    const stored  = localStorage.getItem(LS_EMPLOYERS)
+    const current = stored ? JSON.parse(stored) : []
+    const updated = current.filter(e => e.id !== emp.id)
+    updated.push(emp)
+    localStorage.setItem(LS_EMPLOYERS, JSON.stringify(updated))
+    console.log('[Storage] saveEmployer OK:', emp.name)
+    return true
   } catch(e) {
-    console.warn('[Supabase] saveEmployer exception:', e.message)
+    console.warn('[Storage] saveEmployer:', e.message)
     return false
   }
 }
 
-// ── BENEFIT PROFILES ─────────────────────────────────────────────────────────
+// ── BENEFIT PROFILES — localStorage persistence ───────────────────────────────
 export async function fetchBenefitProfiles() {
-  const { data, error } = await supabase
-    .from('benefit_profiles')
-    .select('employer_id, profile_data')
-  if (error) {
-    console.warn('[Supabase] fetchBenefitProfiles:', error.message)
-    return null
+  try {
+    const stored = localStorage.getItem(LS_PROFILES)
+    if (stored) return JSON.parse(stored)
+    return {}
+  } catch(e) {
+    console.warn('[Storage] fetchBenefitProfiles:', e.message)
+    return {}
   }
-  const map = {}
-  ;(data || []).forEach(row => { map[row.employer_id] = row.profile_data })
-  return map
 }
 
 export async function saveBenefitProfile(employerId, profile) {
-  const { error } = await supabase
-    .from('benefit_profiles')
-    .upsert({
-      employer_id:  employerId,
-      profile_data: profile,
-      updated_at:   new Date().toISOString(),
-    })
-  if (error) console.warn('[Supabase] saveBenefitProfile:', error.message)
-  return !error
+  try {
+    const stored  = localStorage.getItem(LS_PROFILES)
+    const current = stored ? JSON.parse(stored) : {}
+    current[employerId] = profile
+    localStorage.setItem(LS_PROFILES, JSON.stringify(current))
+    console.log('[Storage] saveBenefitProfile OK:', employerId)
+    return true
+  } catch(e) {
+    console.warn('[Storage] saveBenefitProfile:', e.message)
+    return false
+  }
 }
