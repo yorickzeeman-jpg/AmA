@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T } from './data.js'
+import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T, genRef } from './data.js'
 import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile } from './supabase.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
@@ -18,6 +18,7 @@ import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
 import MembershipRegister from './pages/MembershipRegister.jsx'
+import InductionWizard from './pages/InductionWizard.jsx'
 import PWAInstallPrompt from './PWAInstallPrompt.jsx'
 
 export default function App() {
@@ -34,14 +35,17 @@ export default function App() {
   const [users, setUsers]             = useState(INITIAL_USERS)
   const [openCase, setOpenCase]       = useState(null)
   const [members, setMembers]         = useState([])
+  const [inductionCase, setInduction] = useState(null)  // case that triggers induction
 
   // Load persisted employers + benefit profiles from Supabase on login
   useEffect(() => {
     if (!user) return
     async function load() {
       const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
-      if (emps   && emps.length > 0)              setEmployers(emps)
-      if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
+      // emps === null means error/table missing — keep local state
+      // emps === [] means table exists but empty — still set it
+      if (emps !== null) setEmployers(emps)
+      if (profiles !== null && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
     }
     load()
   }, [user?.id])
@@ -203,6 +207,45 @@ export default function App() {
           onClose={()=>setOpenCase(null)}
           onUpdate={updateCase}
           onAddBillingTask={addBillingTask}
+          onLaunchInduction={(c) => setInduction(c)}
+        />
+      )}
+
+      {inductionCase && (
+        <InductionWizard
+          caseData={inductionCase}
+          employer={employers.find(e => e.id === inductionCase.employerId)}
+          benefitProfile={benefitProfiles[inductionCase.employerId]}
+          users={users}
+          currentUser={user}
+          onClose={() => setInduction(null)}
+          onComplete={(profile) => {
+            // Add to membership register
+            const newMember = {
+              id: 'mr'+Date.now(), employerId: inductionCase.employerId,
+              memberName: profile.firstName, surname: profile.surname,
+              idNumber: profile.idNumber, payrollNumber: profile.payrollNumber,
+              benefitCategory: profile.benefitCategory,
+              providentFund: profile.retirementFund, gla: profile.gla,
+              phi: profile.phi, medical: profile.medicalAid,
+              monthlyPremium: 0, status: 'Pending Addition',
+              effectiveDate: profile.startDate, sourceFile: 'Induction Wizard',
+              createdAt: new Date().toISOString(),
+            }
+            setMembers(prev => [...prev, newMember])
+            // Create billing action
+            addBillingTask({
+              id: 'bt'+Date.now(), ref: genRef('BT'),
+              linkedCaseId: inductionCase.id, linkedCaseRef: inductionCase.ref,
+              employerId: inductionCase.employerId,
+              memberName: `${profile.firstName} ${profile.surname}`,
+              actionType: 'Add Member', transactionType: 'New Employee',
+              effectiveDate: profile.startDate,
+              assignedTo: users.find(u=>u.role==='billing_admin'&&u.status==='active')?.id || '',
+              priority: 'Medium', createdBy: user.id, created: new Date().toISOString(),
+            })
+            setInduction(null)
+          }}
         />
       )}
 

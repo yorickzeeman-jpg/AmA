@@ -6,7 +6,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
-export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask }) {
+export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction }) {
   const [tab, setTab]   = useState('Overview')
   const [note, setNote] = useState('')
 
@@ -156,8 +156,19 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                 </div>
               )}
 
-              {/* Status controls */}
-              {canEdit && (
+              {/* Digital Induction button for New Employee cases */}
+              {c.caseTypeName === 'New' && onLaunchInduction && (
+                <div style={{ background:'linear-gradient(135deg,#1e3a5f,#e8680a)', borderRadius:11, padding:'16px 18px', color:'#fff' }}>
+                  <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>🎯 Digital Induction Wizard</div>
+                  <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
+                    Capture all member information once — automatically populates benefit forms, beneficiary nominations and medical aid application.
+                  </div>
+                  <button onClick={() => onLaunchInduction(c)}
+                    style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:'#e8680a', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    ⚡ Launch Induction Wizard →
+                  </button>
+                </div>
+              )}
                 <div>
                   <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:8 }}>Update Status</div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -181,7 +192,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
           {/* ── WORKFLOW ── */}
           {tab === 'Workflow' && (
-            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate}/>
+            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask}/>
           )}
 
           {/* ── DOCUMENTS ── */}
@@ -277,7 +288,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 // ═════════════════════════════════════════════════════════════════════════════
 // WORKFLOW PANEL — interactive step management
 // ═════════════════════════════════════════════════════════════════════════════
-function WorkflowPanel({ c, users, currentUser, onUpdate }) {
+function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
   const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
@@ -460,12 +471,25 @@ function WorkflowPanel({ c, users, currentUser, onUpdate }) {
           <div style={{ fontSize:13, fontWeight:700, color:T.purple, marginBottom:4 }}>All steps complete — billing action required</div>
           <div style={{ fontSize:12, color:'#6d28d9', marginBottom:10 }}>This case requires a billing task. Assign to Daleen or Ithasia using round robin.</div>
           <button onClick={() => {
-            const now = new Date().toISOString()
+            const now  = new Date().toISOString()
             const btRef = genRef('BT')
-            const btId  = 'bt'+Date.now()
-            const billingUsers = users.filter(u=>u.role==='billing_admin'&&u.status==='active')
-            const assigned     = billingUsers[Math.floor(Math.random()*billingUsers.length)]
-            const bt = { id:btId, ref:btRef, linkedCaseId:c.id, linkedCaseRef:c.ref, employerId:c.employerId, memberName:c.memberName, transactionType:c.caseTypeName, effectiveDate:now.split('T')[0], assignedTo:assigned?.id||'', status:'Pending Billing', priority:c.priority, createdBy:currentUser.id, created:now }
+            const btId  = 'bt' + Date.now()
+            const billingUsers = users.filter(u => u.role === 'billing_admin' && u.status === 'active')
+            const assigned     = billingUsers[Math.floor(Math.random() * billingUsers.length)]
+            const bt = {
+              id: btId, ref: btRef,
+              linkedCaseId: c.id, linkedCaseRef: c.ref,
+              employerId: c.employerId, memberName: c.memberName,
+              transactionType: c.caseTypeName,
+              actionType: c.caseTypeName,
+              effectiveDate: now.split('T')[0],
+              assignedTo: assigned?.id || '',
+              status: 'Pending Billing',
+              priority: c.priority,
+              createdBy: currentUser.id,
+              created: now,
+            }
+            onAddBillingTask(bt)
             const audit = [...(c.audit||[]), { time:now, user:currentUser.id, action:`Sent to Billing — Task ${btRef} assigned to ${assigned?.name||'billing queue'}`, type:'billing' }]
             onUpdate({ ...c, status:'Sent to Billing', billingTaskId:btId, audit })
           }} style={{ padding:'9px 18px', background:T.purple, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>

@@ -65,35 +65,58 @@ export async function getStaffProfile(email) {
 
 // ── EMPLOYERS ────────────────────────────────────────────────────────────────
 export async function fetchEmployers() {
-  const { data, error } = await supabase
-    .from('employers')
-    .select('*')
-    .order('name')
-  if (error) {
-    console.warn('[Supabase] fetchEmployers:', error.message)
+  try {
+    const { data, error } = await supabase
+      .from('employers')
+      .select('*')
+      .order('name')
+    if (error) {
+      console.warn('[Supabase] fetchEmployers:', error.message)
+      return null
+    }
+    // Normalise rows to match app's employer object shape
+    return (data || []).map(e => ({
+      id:         e.id,
+      name:       e.name || '',
+      number:     e.number || '',
+      industry:   e.industry || '',
+      status:     e.status || 'active',
+      members:    e.members || 0,
+      contact:    e.contact || '',
+      phone:      e.phone || '',
+      email:      e.email || '',
+      portal:     e.portal || false,
+      consultant: e.consultant || null,
+    }))
+  } catch(e) {
+    console.warn('[Supabase] fetchEmployers exception:', e.message)
     return null
   }
-  return data
 }
 
 export async function saveEmployer(emp) {
-  const { error } = await supabase
-    .from('employers')
-    .upsert({
-      id:         emp.id,
-      name:       emp.name,
-      number:     emp.number,
-      industry:   emp.industry,
-      status:     emp.status,
-      members:    emp.members || 0,
-      contact:    emp.contact,
-      phone:      emp.phone,
-      email:      emp.email,
-      portal:     emp.portal || false,
-      consultant: emp.consultant || null,
-    })
-  if (error) console.warn('[Supabase] saveEmployer:', error.message)
-  return !error
+  try {
+    const { error } = await supabase
+      .from('employers')
+      .upsert({
+        id:         emp.id,
+        name:       emp.name,
+        number:     emp.number,
+        industry:   emp.industry,
+        status:     emp.status,
+        members:    emp.members || 0,
+        contact:    emp.contact,
+        phone:      emp.phone,
+        email:      emp.email,
+        portal:     emp.portal || false,
+        consultant: emp.consultant || null,
+      })
+    if (error) console.warn('[Supabase] saveEmployer:', error.message)
+    return !error
+  } catch(e) {
+    console.warn('[Supabase] saveEmployer exception:', e.message)
+    return false
+  }
 }
 
 // ── BENEFIT PROFILES ─────────────────────────────────────────────────────────

@@ -451,6 +451,9 @@ export const INITIAL_BILLING_TASKS = []
 const BILLING_CASE_TYPES = new Set([
   'Exit', 'New', 'Extended Funeral Application',
   'Death - Retirement', 'Disability',
+  'Medical - Add Dependent', 'Medical - Removal of Dependent',
+  'Medical - Plan Change', 'Medical - Cancellation',
+  'Medical - Change Main Member', 'Medical - Transfer',
 ])
 
 // Auto-action for final step
@@ -662,14 +665,14 @@ export const WORKFLOW_TEMPLATES = {
   // Standard 3-step query workflow applies to all medical and query types.
 
   'Medical - Add Vitality':        { name: 'Medical - Add Vitality',        category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Add Dependent':       { name: 'Medical - Add Dependent',       category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Cancellation':        { name: 'Medical - Cancellation',        category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Add Dependent':       { name: 'Medical - Add Dependent',       category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
+  'Medical - Cancellation':        { name: 'Medical - Cancellation',        category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
   'Medical - Cancel Vitality':     { name: 'Medical - Cancel Vitality',     category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
   'Medical - Claim Query':         { name: 'Medical - Claim Query',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Change Main Member':  { name: 'Medical - Change Main Member',  category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Plan Change':         { name: 'Medical - Plan Change',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Transfer':            { name: 'Medical - Transfer',            category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
-  'Medical - Removal of Dependent':{ name: 'Medical - Removal of Dependent',category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
+  'Medical - Change Main Member':  { name: 'Medical - Change Main Member',  category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
+  'Medical - Plan Change':         { name: 'Medical - Plan Change',         category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
+  'Medical - Transfer':            { name: 'Medical - Transfer',            category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
+  'Medical - Removal of Dependent':{ name: 'Medical - Removal of Dependent',category: 'Medical & Queries', billingTrigger: true, steps: querySteps() },
   'Query - Underwriting':          { name: 'Query - Underwriting',          category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
   'Query - Homeloan':              { name: 'Query - Homeloan',              category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
   'Query - Divorce Order':         { name: 'Query - Divorce Order',         category: 'Medical & Queries', billingTrigger: false, steps: querySteps() },
