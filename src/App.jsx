@@ -39,15 +39,15 @@ export default function App() {
   const [inductionCase, setInduction] = useState(null)
   const [selectedBenefitEmp, setSelectedBenefitEmp] = useState(null)
 
-  // Load persisted employers + benefit profiles from Supabase on login
+  // Load persisted employers + benefit profiles on login
   useEffect(() => {
     if (!user) return
+    console.log('[App] Loading employers and profiles for user:', user.name)
     async function load() {
       const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
-      // emps === null means error/table missing — keep local state
-      // emps === [] means table exists but empty — still set it
-      if (emps !== null) setEmployers(emps)
-      if (profiles !== null && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
+      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles')
+      if (emps && emps.length > 0)  setEmployers(emps)
+      if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
     }
     load()
   }, [user?.id])
