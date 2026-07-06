@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T, genRef } from './data.js'
+import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T, genRef, WORKFLOW_TEMPLATES } from './data.js'
 import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile } from './supabase.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
@@ -16,8 +16,10 @@ import RolesPage from './pages/admin/RolesPage.jsx'
 import CaseTypeConfig from './pages/admin/CaseTypeConfig.jsx'
 import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
+import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
+import EmployerProfile from './pages/EmployerProfile.jsx'
 import MembershipRegister from './pages/MembershipRegister.jsx'
 import InductionWizard from './pages/InductionWizard.jsx'
 import PWAInstallPrompt from './PWAInstallPrompt.jsx'
@@ -38,6 +40,15 @@ export default function App() {
   const [members, setMembers]         = useState([])
   const [inductionCase, setInduction] = useState(null)
   const [selectedBenefitEmp, setSelectedBenefitEmp] = useState(null)
+  const [openProfileEmp, setOpenProfileEmp]         = useState(null)
+  // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
+  const [workflowConfig, setWorkflowConfig] = useState(() => {
+    try {
+      const stored = localStorage.getItem('aeb_workflow_config')
+      if (stored) return JSON.parse(stored)
+    } catch(e) {}
+    return WORKFLOW_TEMPLATES
+  })
 
   // Load persisted employers + benefit profiles on login
   useEffect(() => {
@@ -170,7 +181,7 @@ export default function App() {
           )}
           {page==='employers' && (
             <EmployersPage {...sharedProps} onNav={navigate} onAddEmployer={addEmployer}
-              onOpenBenefitProfile={emp => { setSelectedBenefitEmp(emp); navigate('benefit_profiles') }}
+              onOpenBenefitProfile={emp => setOpenProfileEmp(emp)}
             />
           )}
           {page==='benefit_profiles' && (isGM || role==='administrator') && (
@@ -199,7 +210,7 @@ export default function App() {
           {page==='admin_users'      && <UserManagement     users={users} onUpdateUsers={setUsers}/>}
           {page==='admin_roles'      && <RolesPage/>}
           {page==='admin_categories' && <CategoryConfig     categories={categories} onUpdateCategories={setCategories}/>}
-          {page==='admin_casetypes'  && <CaseTypeConfig     caseTypes={caseTypes} categories={categories} onUpdateCaseTypes={setCaseTypes}/>}
+          {page==='admin_casetypes'  && <WorkflowConfig workflowConfig={workflowConfig} currentUser={user} onUpdateConfig={cfg=>{ setWorkflowConfig(cfg); localStorage.setItem('aeb_workflow_config', JSON.stringify(cfg)) }}/>}
           {page==='admin_employers'  && <EmployerManagement employers={employers} users={users} onUpdateEmployers={setEmployers}/>}
           {page==='admin_allocation' && <AllocationAdmin    users={users}/>}
         </div>
@@ -252,6 +263,22 @@ export default function App() {
               priority: 'Medium', createdBy: user.id, created: new Date().toISOString(),
             })
             setInduction(null)
+          }}
+        />
+      )}
+
+      {openProfileEmp && (
+        <EmployerProfile
+          employer={openProfileEmp}
+          profile={benefitProfiles[openProfileEmp.id]}
+          cases={cases}
+          members={members}
+          billingTasks={billingTasks}
+          currentUser={user}
+          onClose={() => setOpenProfileEmp(null)}
+          onUpdateProfile={(empId, profile) => {
+            setBenefitProfiles(prev => ({...prev, [empId]: profile}))
+            saveBenefitProfile(empId, profile)
           }}
         />
       )}
