@@ -2,8 +2,8 @@
 // Fixed: external requests (Supabase, APIs) are never intercepted
 // Strategy: Cache-first for local assets only. All external requests go direct to network.
 
-const CACHE_NAME  = 'aeb-portal-v3'
-const SHELL_CACHE = 'aeb-shell-v3'
+const CACHE_NAME  = 'aeb-portal-v4'
+const SHELL_CACHE = 'aeb-shell-v4'
 
 const SHELL_FILES = [
   '/',
@@ -82,7 +82,8 @@ self.addEventListener('fetch', event => {
     caches.match(event.request).then(cached => {
       const networkFetch = fetch(event.request).then(response => {
         if (response.ok) {
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()))
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone))
         }
         return response
       }).catch(() => null)
