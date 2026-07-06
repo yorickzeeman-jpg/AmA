@@ -253,7 +253,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
     ]
 
     onSubmit({
-      id:'c'+Date.now(), ref:caseRef, workspace,
+      id: crypto.randomUUID(), ref:caseRef, workspace,
       caseTypeName: selectedType,
       workflowCategory: template?.category || '',
       employerId: form.employerId,

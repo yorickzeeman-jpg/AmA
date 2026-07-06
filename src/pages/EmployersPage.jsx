@@ -338,7 +338,7 @@ function AddEmployerModal({ onClose, onAdd, existingCount }) {
   function handleSubmit() {
     if (!form.name.trim()) { alert('Employer name is required.'); return }
     const newEmp = {
-      id:       'e' + Date.now(),
+      id:       crypto.randomUUID(),
       name:     form.name.trim(),
       number:   form.number || `EMP-${String(existingCount + 1).padStart(3,'0')}`,
       industry: form.industry,
@@ -664,7 +664,7 @@ function BulkUploadFlow({ existingCount, onBack, onSaveAll }) {
   function saveAll() {
     const successful = items.filter(i => i.status === 'done' && i.result)
     const employers  = successful.map((item, idx) => ({
-      id:       'e' + Date.now() + idx,
+      id:       crypto.randomUUID(),
       name:     item.result.data.employerName || item.name.replace('.pdf',''),
       number:   `EMP-${String(existingCount + idx + 1).padStart(3,'0')}`,
       industry: '',

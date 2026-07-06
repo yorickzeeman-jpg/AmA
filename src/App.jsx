@@ -289,7 +289,7 @@ export default function App() {
           onComplete={(profile) => {
             // Add to membership register
             const newMember = {
-              id: 'mr'+Date.now(), employerId: inductionCase.employerId,
+              id: crypto.randomUUID(), employerId: inductionCase.employerId,
               memberName: profile.firstName, surname: profile.surname,
               idNumber: profile.idNumber, payrollNumber: profile.payrollNumber,
               benefitCategory: profile.benefitCategory,
@@ -302,7 +302,7 @@ export default function App() {
             setMembers(prev => [...prev, newMember])
             // Create billing action
             addBillingTask({
-              id: 'bt'+Date.now(), ref: genRef('BT'),
+              id: crypto.randomUUID(), ref: genRef('BT'),
               linkedCaseId: inductionCase.id, linkedCaseRef: inductionCase.ref,
               employerId: inductionCase.employerId,
               memberName: `${profile.firstName} ${profile.surname}`,

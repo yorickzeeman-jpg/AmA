@@ -26,7 +26,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
   function saveNote() {
     if (!note.trim()) return
-    const newNote = { id: 'n' + Date.now(), text: note.trim(), user: currentUser.id, userName: currentUser.name, time: new Date().toISOString() }
+    const newNote = { id: crypto.randomUUID(), text: note.trim(), user: currentUser.id, userName: currentUser.name, time: new Date().toISOString() }
     onUpdate({ ...c, notes: [...(c.notes || []), newNote], audit: addAudit(`Note added: "${note.trim().slice(0, 60)}"`, 'note') })
     setNote('')
   }
@@ -37,7 +37,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
   function sendToBilling() {
     const btRef  = genRef('BT')
-    const btId   = 'bt' + Date.now()
+    const btId   = crypto.randomUUID()
     const now    = new Date().toISOString()
     const billingUsers = users.filter(u => u.role === 'billing_admin' && u.status === 'active')
     const assignBilling = billingUsers[Math.floor(Math.random() * billingUsers.length)]
@@ -504,7 +504,7 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
           <button onClick={() => {
             const now  = new Date().toISOString()
             const btRef = genRef('BT')
-            const btId  = 'bt' + Date.now()
+            const btId  = crypto.randomUUID()
             const billingUsers = users.filter(u => u.role === 'billing_admin' && u.status === 'active')
             const assigned     = billingUsers[Math.floor(Math.random() * billingUsers.length)]
             const bt = {
