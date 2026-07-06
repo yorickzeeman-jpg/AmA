@@ -1,12 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
 // ── CONNECTION ────────────────────────────────────────────────────────────────
-// Project: AEB-PORTAL
-// URL verified against: supabase.com → AEB-PORTAL → Settings → API
-const SUPABASE_URL  = 'https://tjsofkrfqskrtnpjltf.supabase.co'
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqc29ma3JmcXNrcnRucGpsdGYiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc0OTg5NjI0MSwiZXhwIjoyMDY1NDcyMjQxfQ.u3Xy72zdp8o-rEdI3EqIM2nY46n-PMlShwp64VcFwtA'
+// Project: AEB-PORTAL (tjaofkrfqnkrtmjipltf)
+// DO NOT use the Funeral Portal project (tjsofkrfqskrtnpjltf)
+const SUPABASE_URL  = 'https://tjaofkrfqnkrtmjipltf.supabase.co'
+const SUPABASE_ANON = 'sb_publishable_vWaGmLeCA3f0s4OiwyObQw_0hLT1ygk'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+
+// Print on startup to verify correct project in DevTools console
+console.log('[DB] AEB Portal → Supabase project:', SUPABASE_URL)
 
 // ── OFFLINE CACHE KEYS (emergency fallback only) ──────────────────────────────
 // localStorage is written AFTER a successful Supabase fetch.
