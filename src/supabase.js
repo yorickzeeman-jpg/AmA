@@ -19,14 +19,14 @@ const LS_PROFILES  = 'aeb_benefit_profiles_cache'
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 const LOCAL_USERS = [
-  { id:'u0', name:'Yorick',    password:'Yorick2017', role:'general_manager', avatar:'YZ', status:'active' },
-  { id:'u1', name:'Leandre',   password:'Yorick2017', role:'general_manager', avatar:'LV', status:'active' },
-  { id:'u2', name:'Nokulunga', password:'Yorick2017', role:'administrator',   avatar:'NN', status:'active' },
-  { id:'u3', name:'Tevin',     password:'Yorick2017', role:'administrator',   avatar:'TN', status:'active' },
-  { id:'u4', name:'Sesi',      password:'Yorick2017', role:'administrator',   avatar:'SP', status:'active' },
-  { id:'u5', name:'Daleen',    password:'Yorick2017', role:'billing_admin',   avatar:'DT', status:'active' },
-  { id:'u6', name:'Mahlatse',  password:'Yorick2017', role:'administrator',   avatar:'MM', status:'active' },
-  { id:'u7', name:'Ithasia',   password:'Yorick2017', role:'billing_admin',   avatar:'IT', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000001', name:'Yorick',    password:'Yorick2017', role:'general_manager', avatar:'YZ', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000002', name:'Leandre',   password:'Yorick2017', role:'general_manager', avatar:'LV', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000003', name:'Nokulunga', password:'Yorick2017', role:'administrator',   avatar:'NN', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000004', name:'Tevin',     password:'Yorick2017', role:'administrator',   avatar:'TN', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000005', name:'Sesi',      password:'Yorick2017', role:'administrator',   avatar:'SP', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000006', name:'Daleen',    password:'Yorick2017', role:'billing_admin',   avatar:'DT', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000007', name:'Mahlatse',  password:'Yorick2017', role:'administrator',   avatar:'MM', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000008', name:'Ithasia',   password:'Yorick2017', role:'billing_admin',   avatar:'IT', status:'active' },
 ]
 
 export async function signInWithName(name, password) {
