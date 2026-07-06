@@ -49,25 +49,31 @@ export async function getSession() { return null }
 export async function fetchEmployers() {
   console.log('[DB] fetchEmployers: starting')
 
-  // Try Supabase first
-  try {
-    const { data, error } = await supabase
-      .from('employers')
-      .select('*')
-      .order('name')
+  // Retry up to 3 times with backoff — handles Vercel cold-start DNS delays
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { data, error } = await supabase
+        .from('employers')
+        .select('*')
+        .order('name')
 
-    if (error) {
-      console.warn('[DB] fetchEmployers Supabase error:', error.message, error.code)
-    } else {
-      console.log('[DB] fetchEmployers Supabase OK:', data?.length, 'records')
+      if (error) {
+        console.warn(`[DB] fetchEmployers attempt ${attempt} Supabase error:`, error.message)
+        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 1500))
+        continue
+      }
+
+      console.log('[DB] fetchEmployers OK:', data?.length, 'records')
       if (data && data.length > 0) {
-        // Update localStorage cache
         localStorage.setItem(LS_EMPLOYERS, JSON.stringify(data))
         return data.map(normaliseEmployer)
       }
+      // Supabase returned empty — check localStorage before returning empty
+      break
+    } catch(e) {
+      console.warn(`[DB] fetchEmployers attempt ${attempt} exception:`, e.message)
+      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 1500))
     }
-  } catch(e) {
-    console.warn('[DB] fetchEmployers Supabase exception:', e.message)
   }
 
   // Fall back to localStorage

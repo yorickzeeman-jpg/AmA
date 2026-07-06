@@ -54,13 +54,20 @@ export default function App() {
   // Load persisted employers + benefit profiles on login
   useEffect(() => {
     if (!user) return
-    console.log('[App] Loading employers and profiles for user:', user.name)
-    async function load() {
+    console.log('[App] Loading data for user:', user.name)
+
+    async function load(isRetry = false) {
       const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
-      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles')
-      if (emps && emps.length > 0)  setEmployers(emps)
+      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles', isRetry?'(retry)':'')
+      if (emps && emps.length > 0)               setEmployers(emps)
       if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
+      // Retry once after 3s if nothing loaded — handles Vercel cold-start DNS delay
+      if (!isRetry && (!emps || emps.length === 0)) {
+        console.log('[App] No data on first load — retrying in 3s')
+        setTimeout(() => load(true), 3000)
+      }
     }
+
     load()
   }, [user?.id])
 
