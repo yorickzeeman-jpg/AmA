@@ -490,6 +490,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - Retirement': {
     name: 'Death - Retirement', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1,  'Investment statement',  2, ['Investment Statement']),
       step(2,  'Nomination form',       2, ['Nomination Form']),
@@ -506,6 +515,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - Funeral': {
     name: 'Death - Funeral', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Verify contribution',       1),
       step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order']),
@@ -518,6 +536,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - Accidental Funeral': {
     name: 'Death - Accidental Funeral', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Verify contribution',       1),
       step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order', 'Police Report']),
@@ -530,6 +557,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - GLA': {
     name: 'Death - GLA', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Benefit statement',   1, ['Benefit Statement']),
       step(2, 'Nomination form',     2, ['Nomination Form']),
@@ -545,6 +581,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - GEB': {
     name: 'Death - GEB', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Send claims pack', 1, ['Claims Pack']),
       step(2, 'Follow-up',        5),
@@ -556,6 +601,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - GEB Review': {
     name: 'Death - GEB Review', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Send claims pack', 1, ['Claims Pack']),
       step(2, 'Follow-up',        5),
@@ -567,6 +621,15 @@ export const WORKFLOW_TEMPLATES = {
 
   'Death - Extended Funeral': {
     name: 'Death - Extended Funeral', category: 'Claims', billingTrigger: false,
+    requiredFields: [
+      { id:'natural_unnatural', label:'Natural / Unnatural', type:'select', options:['Natural','Unnatural'], required:true },
+      { id:'date_of_death',     label:'Date of Death',       type:'date',   required:true },
+      { id:'relationship',      label:'Relationship to Member', type:'select', options:['Spouse','Child','Parent','Sibling','Other'], required:true },
+      { id:'amount_paid',       label:'Amount Paid',         type:'currency', required:true,  reportingField:true },
+      { id:'claim_number',      label:'Claim Number',        type:'text',   required:false },
+      { id:'date_claim_paid',   label:'Date Claim Paid',     type:'date',   required:false },
+      { id:'claim_status',      label:'Claim Status',        type:'select', options:['Pending','Approved','Paid','Declined'], required:false },
+    ],
     steps: [
       step(1, 'Verify contribution',       1),
       step(2, 'Obtain relevant documents', 3, ['Death Certificate', 'ID Copy', 'Burial Order']),

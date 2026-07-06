@@ -17,6 +17,7 @@ import CaseTypeConfig from './pages/admin/CaseTypeConfig.jsx'
 import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
+import SLAConfig from './pages/admin/SLAConfig.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
 import EmployerProfile from './pages/EmployerProfile.jsx'
@@ -211,6 +212,7 @@ export default function App() {
           {page==='admin_roles'      && <RolesPage/>}
           {page==='admin_categories' && <CategoryConfig     categories={categories} onUpdateCategories={setCategories}/>}
           {page==='admin_casetypes'  && <WorkflowConfig workflowConfig={workflowConfig} currentUser={user} onUpdateConfig={cfg=>{ setWorkflowConfig(cfg); localStorage.setItem('aeb_workflow_config', JSON.stringify(cfg)) }}/>}
+          {page==='admin_sla'        && <SLAConfig workflowConfig={workflowConfig} currentUser={user} onUpdateConfig={cfg=>{ setWorkflowConfig(cfg); localStorage.setItem('aeb_workflow_config', JSON.stringify(cfg)) }}/>}
           {page==='admin_employers'  && <EmployerManagement employers={employers} users={users} onUpdateEmployers={setEmployers}/>}
           {page==='admin_allocation' && <AllocationAdmin    users={users}/>}
         </div>

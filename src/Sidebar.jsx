@@ -18,6 +18,7 @@ const EMPLOYER_NAV = [
 const ADMIN_NAV = [
   { id:'admin_users',      label:'User Management',  icon:'users'    },
   { id:'admin_casetypes',  label:'Workflow Config',  icon:'workflow' },
+  { id:'admin_sla',        label:'SLA Configuration',icon:'sla'      },
   { id:'admin_categories', label:'Categories',       icon:'filter'   },
   { id:'admin_allocation', label:'Allocation Rules', icon:'transfer' },
 ]

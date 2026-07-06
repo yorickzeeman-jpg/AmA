@@ -156,6 +156,34 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                 </div>
               )}
 
+              {/* Death claim fields */}
+              {c.extraFields && Object.keys(c.extraFields).filter(k=>c.extraFields[k]).length > 0 && (
+                <div style={{ background:'#fff1f2', border:'1px solid #fecaca', borderRadius:10, padding:'12px 14px' }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.red, marginBottom:10 }}>Death Claim Information</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {Object.entries(c.extraFields).filter(([,v])=>v).map(([key, val]) => {
+                      const label = {
+                        natural_unnatural: 'Natural / Unnatural',
+                        date_of_death:     'Date of Death',
+                        relationship:      'Relationship',
+                        amount_paid:       'Amount Paid',
+                        claim_number:      'Claim Number',
+                        date_claim_paid:   'Date Claim Paid',
+                        claim_status:      'Claim Status',
+                      }[key] || key
+                      return (
+                        <div key={key}>
+                          <div style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', marginBottom:3 }}>{label}</div>
+                          <div style={{ fontSize:13, fontWeight:key==='amount_paid'?800:500, color:key==='amount_paid'?T.red:T.text }}>
+                            {key==='amount_paid' ? `R${Number(val).toLocaleString()}` : val}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Digital Induction button for New Employee cases */}
               {c.caseTypeName === 'New' && onLaunchInduction && (
                 <div style={{ background:'linear-gradient(135deg,#1e3a5f,#e8680a)', borderRadius:11, padding:'16px 18px', color:'#fff' }}>
@@ -169,6 +197,9 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                   </button>
                 </div>
               )}
+
+              {/* Status controls */}
+              {canEdit && (
                 <div>
                   <div style={{ fontSize:12, fontWeight:700, color:'#374151', marginBottom:8 }}>Update Status</div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>

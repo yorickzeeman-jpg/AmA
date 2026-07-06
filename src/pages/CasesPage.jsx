@@ -222,7 +222,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
   const [attachedFiles, setFiles]  = useState([])
   const [form, setForm] = useState({
     employerId: isEmployer ? currentUser.employer : '',
-    priority: 'Medium', memberName:'', memberId:'', description:'',
+    priority: 'Medium', memberName:'', memberId:'', description:'', extraFields:{},
   })
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
@@ -265,6 +265,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       created:today,
       slaDate: new Date(Date.now()+5*86400000).toISOString().split('T')[0],
       description: form.description,
+      extraFields:  form.extraFields || {},
       billingTaskId:null,
       workflow: wf,
       notes:[], documents, audit,
@@ -404,6 +405,38 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
               </Field>
               <Field label="Member Name"><input value={form.memberName} onChange={e=>set('memberName',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
               <Field label="Member ID / Reference"><input value={form.memberId} onChange={e=>set('memberId',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
+
+              {/* Death claim required fields */}
+              {template?.requiredFields?.length > 0 && (
+                <div style={{ gridColumn:'1/-1', background:'#fff1f2', border:'1px solid #fecaca', borderRadius:9, padding:'12px 14px' }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.red, marginBottom:10 }}>Death Claim Information</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {template.requiredFields.map(field => (
+                      <div key={field.id} style={{ gridColumn: field.id==='claim_number'||field.id==='date_claim_paid'||field.id==='claim_status' ? undefined : undefined }}>
+                        <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.5px', display:'block', marginBottom:4 }}>
+                          {field.label}{field.required && <span style={{ color:T.red }}> *</span>}{!field.required && <span style={{ color:T.gray, fontWeight:400 }}> (optional)</span>}
+                        </label>
+                        {field.type === 'select' ? (
+                          <select value={form.extraFields?.[field.id]||''} onChange={e=>set('extraFields',{...form.extraFields,[field.id]:e.target.value})} style={selectSt}>
+                            <option value="">Select…</option>
+                            {field.options.map(o=><option key={o}>{o}</option>)}
+                          </select>
+                        ) : field.type === 'currency' ? (
+                          <div style={{ position:'relative' }}>
+                            <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', fontSize:12, fontWeight:700, color:T.gray }}>R</span>
+                            <input type="number" step="0.01" value={form.extraFields?.[field.id]||''} onChange={e=>set('extraFields',{...form.extraFields,[field.id]:e.target.value})} style={{...inputSt, paddingLeft:24}} placeholder="0.00"/>
+                          </div>
+                        ) : field.type === 'date' ? (
+                          <input type="date" value={form.extraFields?.[field.id]||''} onChange={e=>set('extraFields',{...form.extraFields,[field.id]:e.target.value})} style={inputSt}/>
+                        ) : (
+                          <input value={form.extraFields?.[field.id]||''} onChange={e=>set('extraFields',{...form.extraFields,[field.id]:e.target.value})} style={inputSt}/>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <Field label="Description *">
                 <textarea value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Describe the case…" style={{ ...inputSt, minHeight:100, resize:'vertical' }}/>
               </Field>
