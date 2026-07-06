@@ -247,34 +247,50 @@ export async function fetchCases() {
 }
 
 export async function saveCase(c) {
+  const row = {
+    id:             c.id,
+    ref:            c.ref,
+    employer_id:    c.employerId,
+    case_type_name: c.caseTypeName,
+    case_type_id:   c.caseTypeId,
+    workspace:      c.workspace || 'employer',
+    status:         c.status,
+    priority:       c.priority,
+    member_name:    c.memberName,
+    member_id:      c.memberId,
+    description:    c.description,
+    assigned_to:    c.assignedTo,
+    sla_date:       c.slaDate,
+    sla_days:       c.slaDays,
+    billing_trigger:c.billingTrigger || false,
+    billing_task_id:c.billingTaskId || null,
+    extra_fields:   c.extraFields || {},
+    workflow:       c.workflow || null,
+    notes:          c.notes || [],
+    audit:          c.audit || [],
+    documents:      c.documents || [],
+    escalated:      c.escalated || false,
+    created:        c.created,
+  }
+
+  console.log('[DB] saveCase payload:', JSON.stringify(row, null, 2))
+
   try {
-    const row = {
-      id:             c.id,
-      ref:            c.ref,
-      employer_id:    c.employerId,
-      case_type_name: c.caseTypeName,
-      case_type_id:   c.caseTypeId,
-      workspace:      c.workspace || 'employer',
-      status:         c.status,
-      priority:       c.priority,
-      member_name:    c.memberName,
-      member_id:      c.memberId,
-      description:    c.description,
-      assigned_to:    c.assignedTo,
-      sla_date:       c.slaDate,
-      sla_days:       c.slaDays,
-      billing_trigger:c.billingTrigger || false,
-      billing_task_id:c.billingTaskId,
-      extra_fields:   c.extraFields || {},
-      workflow:       c.workflow,
-      notes:          c.notes || [],
-      audit:          c.audit || [],
-      documents:      c.documents || [],
-      escalated:      c.escalated || false,
-      created:        c.created,
+    const { data, error } = await supabase
+      .from('cases')
+      .upsert(row)
+      .select()
+
+    if (error) {
+      console.error('[DB] saveCase FAILED')
+      console.error('[DB] saveCase error message:', error.message)
+      console.error('[DB] saveCase error code:', error.code)
+      console.error('[DB] saveCase error details:', error.details)
+      console.error('[DB] saveCase error hint:', error.hint)
+      return false
     }
-    const { error } = await supabase.from('cases').upsert(row)
-    if (error) { console.error('[DB] saveCase error:', error.message); return false }
+
+    console.log('[DB] saveCase OK — id:', data?.[0]?.id)
     return true
   } catch(e) {
     console.error('[DB] saveCase exception:', e.message)
