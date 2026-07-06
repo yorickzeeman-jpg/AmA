@@ -18,6 +18,7 @@ import CategoryConfig from './pages/admin/CategoryConfig.jsx'
 import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
 import SLAConfig from './pages/admin/SLAConfig.jsx'
+import LeandreAI from './pages/LeandreAI.jsx'
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
 import EmployerProfile from './pages/EmployerProfile.jsx'
@@ -55,19 +56,12 @@ export default function App() {
   useEffect(() => {
     if (!user) return
     console.log('[App] Loading data for user:', user.name)
-
-    async function load(isRetry = false) {
+    async function load() {
       const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
-      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles', isRetry?'(retry)':'')
-      if (emps && emps.length > 0)               setEmployers(emps)
+      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles')
+      if (emps && emps.length > 0)                      setEmployers(emps)
       if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
-      // Retry once after 3s if nothing loaded — handles Vercel cold-start DNS delay
-      if (!isRetry && (!emps || emps.length === 0)) {
-        console.log('[App] No data on first load — retrying in 3s')
-        setTimeout(() => load(true), 3000)
-      }
     }
-
     load()
   }, [user?.id])
 
@@ -214,6 +208,9 @@ export default function App() {
             />
           )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}
+          {page==='leandre_ai' && (isGM || role==='administrator') && (
+            <LeandreAI cases={cases} billingTasks={billingTasks} employers={employers} users={users} currentUser={user}/>
+          )}
           {/* Admin */}
           {page==='admin_users'      && <UserManagement     users={users} onUpdateUsers={setUsers}/>}
           {page==='admin_roles'      && <RolesPage/>}

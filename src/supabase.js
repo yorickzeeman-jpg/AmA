@@ -1,13 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
+// ── CONNECTION ────────────────────────────────────────────────────────────────
+// Project: AEB-PORTAL
+// URL verified against: supabase.com → AEB-PORTAL → Settings → API
 const SUPABASE_URL  = 'https://tjsofkrfqskrtnpjltf.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqc29ma3JmcXNrcnRucGpsdGYiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc0OTg5NjI0MSwiZXhwIjoyMDY1NDcyMjQxfQ.u3Xy72zdp8o-rEdI3EqIM2nY46n-PMlShwp64VcFwtA'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-// ── LOCAL STORAGE KEYS ────────────────────────────────────────────────────────
-const LS_EMPLOYERS = 'aeb_employers'
-const LS_PROFILES  = 'aeb_benefit_profiles'
+// ── OFFLINE CACHE KEYS (emergency fallback only) ──────────────────────────────
+// localStorage is written AFTER a successful Supabase fetch.
+// It is read ONLY if Supabase is completely unreachable.
+const LS_EMPLOYERS = 'aeb_employers_cache'
+const LS_PROFILES  = 'aeb_benefit_profiles_cache'
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 const LOCAL_USERS = [
@@ -22,18 +27,15 @@ const LOCAL_USERS = [
 ]
 
 export async function signInWithName(name, password) {
-  const nameTrimmed = name.trim()
-  const passTrimmed = password.trim()
+  const n = name.trim(), p = password.trim()
   const local = LOCAL_USERS.find(u =>
-    u.name.toLowerCase() === nameTrimmed.toLowerCase() &&
-    u.password === passTrimmed && u.status === 'active'
+    u.name.toLowerCase() === n.toLowerCase() && u.password === p && u.status === 'active'
   )
   if (local) return local
   try {
     const { data, error } = await supabase
-      .from('portal_users').select('*')
-      .ilike('name', nameTrimmed).eq('status', 'active').single()
-    if (!error && data && data.password === passTrimmed) return data
+      .from('portal_users').select('*').ilike('name', n).eq('status', 'active').single()
+    if (!error && data && data.password === p) return data
   } catch(e) {}
   throw new Error('Incorrect name or password.')
 }
@@ -42,74 +44,68 @@ export async function signOut() { return true }
 export async function getSession() { return null }
 
 // ── EMPLOYERS ─────────────────────────────────────────────────────────────────
-// Strategy: Supabase primary + localStorage backup
-// On save: write to BOTH
-// On load: try Supabase first, fall back to localStorage
+// Primary: Supabase
+// Fallback: localStorage cache (only if Supabase completely unreachable)
 
 export async function fetchEmployers() {
-  console.log('[DB] fetchEmployers: starting')
+  console.log('[DB] fetchEmployers — connecting to Supabase')
 
-  // Retry up to 3 times with backoff — handles Vercel cold-start DNS delays
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const { data, error } = await supabase
-        .from('employers')
-        .select('*')
-        .order('name')
+  try {
+    const { data, error } = await supabase
+      .from('employers')
+      .select('*')
+      .order('name')
 
-      if (error) {
-        console.warn(`[DB] fetchEmployers attempt ${attempt} Supabase error:`, error.message)
-        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 1500))
-        continue
-      }
-
-      console.log('[DB] fetchEmployers OK:', data?.length, 'records')
-      if (data && data.length > 0) {
-        localStorage.setItem(LS_EMPLOYERS, JSON.stringify(data))
-        return data.map(normaliseEmployer)
-      }
-      // Supabase returned empty — check localStorage before returning empty
-      break
-    } catch(e) {
-      console.warn(`[DB] fetchEmployers attempt ${attempt} exception:`, e.message)
-      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 1500))
+    if (error) {
+      console.error('[DB] fetchEmployers Supabase error:', error.message, '— falling back to cache')
+      return readEmployerCache()
     }
-  }
 
-  // Fall back to localStorage
+    const employers = (data || []).map(normaliseEmployer)
+    console.log('[DB] fetchEmployers OK:', employers.length, 'records from Supabase')
+
+    // Update offline cache with fresh data
+    try { localStorage.setItem(LS_EMPLOYERS, JSON.stringify(data)) } catch(e) {}
+
+    return employers
+
+  } catch(e) {
+    console.error('[DB] fetchEmployers network error:', e.message, '— falling back to cache')
+    return readEmployerCache()
+  }
+}
+
+function readEmployerCache() {
   try {
     const stored = localStorage.getItem(LS_EMPLOYERS)
     if (stored) {
       const data = JSON.parse(stored)
-      console.log('[DB] fetchEmployers localStorage fallback:', data.length, 'records')
+      console.warn('[DB] fetchEmployers using offline cache:', data.length, 'records')
       return data.map(normaliseEmployer)
     }
-  } catch(e) {
-    console.warn('[DB] fetchEmployers localStorage error:', e.message)
-  }
-
-  console.log('[DB] fetchEmployers: no data found anywhere')
+  } catch(e) {}
+  console.warn('[DB] fetchEmployers no cache available — returning empty')
   return []
 }
 
 function normaliseEmployer(e) {
   return {
-    id:         e.id        || '',
-    name:       e.name      || '',
-    number:     e.number    || '',
-    industry:   e.industry  || '',
-    status:     e.status    || 'active',
-    members:    e.members   || 0,
-    contact:    e.contact   || '',
-    phone:      e.phone     || '',
-    email:      e.email     || '',
-    portal:     e.portal    || false,
-    consultant: e.consultant|| null,
+    id:         e.id         || '',
+    name:       e.name       || '',
+    number:     e.number     || '',
+    industry:   e.industry   || '',
+    status:     e.status     || 'active',
+    members:    e.members    || 0,
+    contact:    e.contact    || '',
+    phone:      e.phone      || '',
+    email:      e.email      || '',
+    portal:     e.portal     || false,
+    consultant: e.consultant || null,
   }
 }
 
 export async function saveEmployer(emp) {
-  console.log('[DB] saveEmployer: starting for', emp.name, 'id:', emp.id)
+  console.log('[DB] saveEmployer:', emp.name)
 
   const row = {
     id:         emp.id,
@@ -125,93 +121,80 @@ export async function saveEmployer(emp) {
     consultant: emp.consultant || null,
   }
 
-  // Always write to localStorage immediately
   try {
-    const stored  = localStorage.getItem(LS_EMPLOYERS)
-    const current = stored ? JSON.parse(stored) : []
-    const updated = current.filter(e => e.id !== emp.id)
-    updated.push(row)
-    localStorage.setItem(LS_EMPLOYERS, JSON.stringify(updated))
-    console.log('[DB] saveEmployer localStorage OK')
-  } catch(e) {
-    console.warn('[DB] saveEmployer localStorage error:', e.message)
-  }
-
-  // Also write to Supabase
-  try {
-    const { data, error } = await supabase
-      .from('employers')
-      .upsert(row)
-      .select()
+    const { data, error } = await supabase.from('employers').upsert(row).select()
 
     if (error) {
-      console.error('[DB] saveEmployer Supabase error:', error.message, error.code, error.details)
+      console.error('[DB] saveEmployer Supabase error:', error.message)
+      updateEmployerCache(row)
       return false
     }
 
-    console.log('[DB] saveEmployer Supabase OK — record:', data?.[0]?.id)
+    console.log('[DB] saveEmployer OK — Supabase id:', data?.[0]?.id)
+    updateEmployerCache(row)
     return true
+
   } catch(e) {
-    console.error('[DB] saveEmployer Supabase exception:', e.message)
+    console.error('[DB] saveEmployer network error:', e.message)
+    updateEmployerCache(row)
     return false
   }
 }
 
+function updateEmployerCache(row) {
+  try {
+    const stored  = localStorage.getItem(LS_EMPLOYERS)
+    const current = stored ? JSON.parse(stored) : []
+    const updated = current.filter(e => e.id !== row.id)
+    updated.push(row)
+    localStorage.setItem(LS_EMPLOYERS, JSON.stringify(updated))
+  } catch(e) {}
+}
+
 // ── BENEFIT PROFILES ──────────────────────────────────────────────────────────
 export async function fetchBenefitProfiles() {
-  console.log('[DB] fetchBenefitProfiles: starting')
+  console.log('[DB] fetchBenefitProfiles — connecting to Supabase')
 
-  // Try Supabase first
   try {
     const { data, error } = await supabase
       .from('benefit_profiles')
       .select('employer_id, profile_data')
 
     if (error) {
-      console.warn('[DB] fetchBenefitProfiles Supabase error:', error.message, error.code)
-    } else {
-      console.log('[DB] fetchBenefitProfiles Supabase OK:', data?.length, 'records')
-      if (data && data.length > 0) {
-        const map = {}
-        data.forEach(row => { map[row.employer_id] = row.profile_data })
-        localStorage.setItem(LS_PROFILES, JSON.stringify(map))
-        return map
-      }
+      console.error('[DB] fetchBenefitProfiles Supabase error:', error.message, '— falling back to cache')
+      return readProfileCache()
     }
-  } catch(e) {
-    console.warn('[DB] fetchBenefitProfiles Supabase exception:', e.message)
-  }
 
-  // Fall back to localStorage
+    const map = {}
+    ;(data || []).forEach(row => { map[row.employer_id] = row.profile_data })
+    console.log('[DB] fetchBenefitProfiles OK:', Object.keys(map).length, 'profiles from Supabase')
+
+    // Update offline cache
+    try { localStorage.setItem(LS_PROFILES, JSON.stringify(map)) } catch(e) {}
+
+    return map
+
+  } catch(e) {
+    console.error('[DB] fetchBenefitProfiles network error:', e.message, '— falling back to cache')
+    return readProfileCache()
+  }
+}
+
+function readProfileCache() {
   try {
     const stored = localStorage.getItem(LS_PROFILES)
     if (stored) {
       const data = JSON.parse(stored)
-      console.log('[DB] fetchBenefitProfiles localStorage fallback:', Object.keys(data).length, 'profiles')
+      console.warn('[DB] fetchBenefitProfiles using offline cache:', Object.keys(data).length, 'profiles')
       return data
     }
-  } catch(e) {
-    console.warn('[DB] fetchBenefitProfiles localStorage error:', e.message)
-  }
-
+  } catch(e) {}
   return {}
 }
 
 export async function saveBenefitProfile(employerId, profile) {
-  console.log('[DB] saveBenefitProfile: starting for employer', employerId)
+  console.log('[DB] saveBenefitProfile:', employerId)
 
-  // Always write to localStorage immediately
-  try {
-    const stored  = localStorage.getItem(LS_PROFILES)
-    const current = stored ? JSON.parse(stored) : {}
-    current[employerId] = profile
-    localStorage.setItem(LS_PROFILES, JSON.stringify(current))
-    console.log('[DB] saveBenefitProfile localStorage OK')
-  } catch(e) {
-    console.warn('[DB] saveBenefitProfile localStorage error:', e.message)
-  }
-
-  // Also write to Supabase
   try {
     const { data, error } = await supabase
       .from('benefit_profiles')
@@ -219,14 +202,27 @@ export async function saveBenefitProfile(employerId, profile) {
       .select()
 
     if (error) {
-      console.error('[DB] saveBenefitProfile Supabase error:', error.message, error.code, error.details)
+      console.error('[DB] saveBenefitProfile Supabase error:', error.message)
+      updateProfileCache(employerId, profile)
       return false
     }
 
-    console.log('[DB] saveBenefitProfile Supabase OK — employer:', data?.[0]?.employer_id)
+    console.log('[DB] saveBenefitProfile OK:', data?.[0]?.employer_id)
+    updateProfileCache(employerId, profile)
     return true
+
   } catch(e) {
-    console.error('[DB] saveBenefitProfile Supabase exception:', e.message)
+    console.error('[DB] saveBenefitProfile network error:', e.message)
+    updateProfileCache(employerId, profile)
     return false
   }
+}
+
+function updateProfileCache(employerId, profile) {
+  try {
+    const stored  = localStorage.getItem(LS_PROFILES)
+    const current = stored ? JSON.parse(stored) : {}
+    current[employerId] = profile
+    localStorage.setItem(LS_PROFILES, JSON.stringify(current))
+  } catch(e) {}
 }

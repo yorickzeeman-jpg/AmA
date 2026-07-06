@@ -10,6 +10,7 @@ const INTERNAL_NAV = [
   { id:'billing',        label:'Billing',         icon:'sla'       },
   { id:'employers',      label:'Employers',       icon:'employers' },
   { id:'reports',        label:'Reports',         icon:'reports'   },
+  { id:'leandre_ai',    label:'Leandre AI',       icon:'dashboard' },
 ]
 const EMPLOYER_NAV = [
   { id:'dashboard',  label:'Dashboard',      icon:'dashboard' },
@@ -38,6 +39,7 @@ export default function Sidebar({ user, page, onNav, onLogout, open }) {
   const canEmailIntake = ['general_manager','administrator'].includes(user.role)
   const nav        = isEmployer ? EMPLOYER_NAV : INTERNAL_NAV.filter(item => {
     if (item.id === 'billing' && !isGM && !isBilling) return false
+    if (item.id === 'leandre_ai' && !isGM && user.role !== 'administrator') return false
     if (item.id === 'benefit_profiles' && !isGM && user.role !== 'administrator') return false
     if (item.id === 'internal_cases' && isEmployer) return false
     if (item.id === 'email_intake' && !canEmailIntake) return false

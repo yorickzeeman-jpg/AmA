@@ -1,6 +1,14 @@
 import { T, INITIAL_CATEGORIES, slaStatus } from '../data.js'
 import { KPI, BarRow, Card, CardHead, StatusBadge, SLAChip, Icon, Empty } from '../ui.jsx'
 
+function calcHealthScore(open, overdue, billingPending, escalated) {
+  let score = 100
+  if (overdue.length > 0)       score -= Math.min(overdue.length * 8, 40)
+  if (billingPending > 5)       score -= Math.min((billingPending - 5) * 3, 20)
+  if (escalated.length > 0)     score -= Math.min(escalated.length * 5, 20)
+  return Math.max(0, score)
+}
+
 export default function DashboardPage({ cases, billingTasks=[], caseTypes, categories, employers, users, currentUser, onOpenCase, onOpenBilling, onNav }) {
   const role = currentUser.role
   const isGM       = role === 'general_manager'
@@ -37,15 +45,37 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
     return { ...cat, count: empCases.filter(c => typeIds.includes(c.caseTypeId)).length }
   }).filter(c => c.count > 0)
 
+  const pendingBillingCount = myBilling.filter(bt=>!['Billing Complete'].includes(bt.status)).length
+  const healthScore = calcHealthScore(open, overdue, pendingBillingCount, escalated)
+  const healthCfg   = healthScore >= 80
+    ? { label:'HEALTHY',  color:'#059669', bg:'#f0fdf4', border:'#bbf7d0' }
+    : healthScore >= 60
+    ? { label:'AMBER',    color:'#d97706', bg:'#fffbeb', border:'#fde68a' }
+    : { label:'CRITICAL', color:'#dc2626', bg:'#fff1f2', border:'#fecaca' }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20, animation:'fadeIn .3s ease' }}>
-      <div>
-        <h1 style={{ fontSize:21, fontWeight:800, color:T.text, margin:'0 0 3px', letterSpacing:'-0.5px' }}>
-          {isGM ? 'Management Dashboard' : isAdmin ? 'My Workbench' : isBilling ? 'Billing Dashboard' : 'My Cases'}
-        </h1>
-        <p style={{ margin:0, color:T.gray, fontSize:12 }}>
-          {currentUser.name} · {new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
-        </p>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:10 }}>
+        <div>
+          <h1 style={{ fontSize:21, fontWeight:800, color:T.text, margin:'0 0 3px', letterSpacing:'-0.5px' }}>
+            {isGM ? 'Management Dashboard' : isAdmin ? 'My Workbench' : isBilling ? 'Billing Dashboard' : 'My Cases'}
+          </h1>
+          <p style={{ margin:0, color:T.gray, fontSize:12 }}>
+            {currentUser.name} · {new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
+          </p>
+        </div>
+        {(isGM || isAdmin) && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', background:healthCfg.bg, border:`1.5px solid ${healthCfg.border}`, borderRadius:10, cursor:'pointer' }}
+            onClick={()=>onNav('leandre_ai')}>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:'#fff', border:`2px solid ${healthCfg.color}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:900, color:healthCfg.color }}>
+              {healthScore}
+            </div>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:healthCfg.color }}>{healthCfg.label}</div>
+              <div style={{ fontSize:10, color:T.gray }}>Operations Health · View Leandre AI →</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions — Administrator and General Manager only */}

@@ -1,11 +1,10 @@
-// AEB Portal — Service Worker v1
-// Caches the app shell for instant load and offline access.
-// Strategy: Cache-first for assets, Network-first for API calls.
+// AEB Portal — Service Worker v3
+// Fixed: external requests (Supabase, APIs) are never intercepted
+// Strategy: Cache-first for local assets only. All external requests go direct to network.
 
-const CACHE_NAME  = 'aeb-portal-v1'
-const SHELL_CACHE = 'aeb-shell-v1'
+const CACHE_NAME  = 'aeb-portal-v3'
+const SHELL_CACHE = 'aeb-shell-v3'
 
-// App shell — files that make the app work offline
 const SHELL_FILES = [
   '/',
   '/index.html',
@@ -14,98 +13,86 @@ const SHELL_FILES = [
   '/icons/icon-512.png',
 ]
 
-// ── INSTALL — cache the app shell ─────────────────────────────────────────
+// Domains that must NEVER be intercepted by the service worker
+const PASSTHROUGH_DOMAINS = [
+  'supabase.co',
+  'resend.com',
+  'anthropic.com',
+]
+
+function isPassthrough(url) {
+  return PASSTHROUGH_DOMAINS.some(domain => url.hostname.endsWith(domain))
+}
+
+// ── INSTALL ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  console.log('[SW] Installing AEB Portal service worker')
+  console.log('[SW v3] Installing')
   event.waitUntil(
     caches.open(SHELL_CACHE)
-      .then(cache => {
-        console.log('[SW] Caching app shell')
-        return cache.addAll(SHELL_FILES)
-      })
+      .then(cache => cache.addAll(SHELL_FILES))
       .then(() => self.skipWaiting())
-      .catch(err => console.error('[SW] Shell cache failed:', err))
+      .catch(err => console.error('[SW v3] Shell cache failed:', err))
   )
 })
 
-// ── ACTIVATE — clean up old caches ────────────────────────────────────────
+// ── ACTIVATE — clean ALL old caches ──────────────────────────────────────────
 self.addEventListener('activate', event => {
-  console.log('[SW] Activating new service worker')
+  console.log('[SW v3] Activating — clearing old caches')
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
+    caches.keys().then(keys =>
+      Promise.all(
         keys
           .filter(key => key !== CACHE_NAME && key !== SHELL_CACHE)
           .map(key => {
-            console.log('[SW] Deleting old cache:', key)
+            console.log('[SW v3] Deleting old cache:', key)
             return caches.delete(key)
           })
       )
-    }).then(() => self.clients.claim())
+    ).then(() => self.clients.claim())
   )
 })
 
-// ── FETCH — serve from cache, update in background ────────────────────────
+// ── FETCH ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
 
-  // Skip non-GET and external requests
-  if (event.request.method !== 'GET') return
-  if (!url.origin === location.origin) return
+  // CRITICAL: never intercept external APIs — let them go straight to network
+  if (isPassthrough(url)) return
+  if (url.origin !== location.origin) return
 
-  // For navigation requests (page loads) — network first, fallback to cache
+  // Skip non-GET
+  if (event.request.method !== 'GET') return
+
+  // Navigation — network first, fallback to cached index.html
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // Cache the fresh response
           const clone = response.clone()
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone))
           return response
         })
-        .catch(() => {
-          // Offline — serve cached index.html (SPA handles routing)
-          return caches.match('/index.html')
-            || caches.match('/')
-        })
+        .catch(() => caches.match('/index.html') || caches.match('/'))
     )
     return
   }
 
-  // For assets (JS, CSS, images, fonts) — cache first, then network
+  // Local assets — cache first, refresh in background
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if (cached) {
-        // Serve from cache immediately, refresh in background
-        const refresh = fetch(event.request).then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME)
-              .then(cache => cache.put(event.request, response.clone()))
-          }
-          return response
-        }).catch(() => {})
-        return cached
-      }
-      // Not cached — fetch from network and cache it
-      return fetch(event.request).then(response => {
+      const networkFetch = fetch(event.request).then(response => {
         if (response.ok) {
-          const clone = response.clone()
-          caches.open(CACHE_NAME)
-            .then(cache => cache.put(event.request, clone))
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()))
         }
         return response
-      }).catch(() => {
-        // Offline and not cached — return empty response for assets
-        return new Response('', { status: 408, statusText: 'Offline' })
-      })
+      }).catch(() => null)
+
+      return cached || networkFetch
     })
   )
 })
 
-// ── MESSAGE — force update from app ───────────────────────────────────────
+// ── MESSAGE ───────────────────────────────────────────────────────────────────
 self.addEventListener('message', event => {
-  if (event.data === 'skipWaiting') {
-    console.log('[SW] Forced update — skipping waiting')
-    self.skipWaiting()
-  }
+  if (event.data === 'skipWaiting') self.skipWaiting()
 })
