@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T, genRef, WORKFLOW_TEMPLATES } from './data.js'
-import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile } from './supabase.js'
+import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile, fetchCases, saveCase } from './supabase.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -19,6 +19,35 @@ import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
 import SLAConfig from './pages/admin/SLAConfig.jsx'
 import LeandreAI from './pages/LeandreAI.jsx'
+
+// Convert Supabase snake_case row → app camelCase case object
+function normCase(row) {
+  return {
+    id:             row.id,
+    ref:            row.ref,
+    employerId:     row.employer_id,
+    caseTypeName:   row.case_type_name,
+    caseTypeId:     row.case_type_id,
+    workspace:      row.workspace || 'employer',
+    status:         row.status,
+    priority:       row.priority,
+    memberName:     row.member_name,
+    memberId:       row.member_id,
+    description:    row.description,
+    assignedTo:     row.assigned_to,
+    slaDate:        row.sla_date,
+    slaDays:        row.sla_days,
+    billingTrigger: row.billing_trigger,
+    billingTaskId:  row.billing_task_id,
+    extraFields:    row.extra_fields || {},
+    workflow:       row.workflow,
+    notes:          row.notes || [],
+    audit:          row.audit || [],
+    documents:      row.documents || [],
+    escalated:      row.escalated || false,
+    created:        row.created || row.created_at?.split('T')[0],
+  }
+}
 import EmailIntake from './pages/EmailIntake.jsx'
 import EmployerBenefitProfiles from './pages/EmployerBenefitProfiles.jsx'
 import EmployerProfile from './pages/EmployerProfile.jsx'
@@ -57,10 +86,13 @@ export default function App() {
     if (!user) return
     console.log('[App] Loading data for user:', user.name)
     async function load() {
-      const [emps, profiles] = await Promise.all([fetchEmployers(), fetchBenefitProfiles()])
-      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles')
-      if (emps && emps.length > 0)                      setEmployers(emps)
-      if (profiles && Object.keys(profiles).length > 0) setBenefitProfiles(profiles)
+      const [emps, profiles, loadedCases] = await Promise.all([
+        fetchEmployers(), fetchBenefitProfiles(), fetchCases()
+      ])
+      console.log('[App] Loaded:', emps?.length, 'employers,', Object.keys(profiles||{}).length, 'profiles,', loadedCases?.length, 'cases')
+      if (emps        && emps.length > 0)                      setEmployers(emps)
+      if (profiles    && Object.keys(profiles).length > 0)     setBenefitProfiles(profiles)
+      if (loadedCases && loadedCases.length > 0)               setCases(loadedCases.map(normCase))
     }
     load()
   }, [user?.id])
@@ -90,8 +122,19 @@ export default function App() {
   const pendingBilling = billingTasks.filter(bt => bt.billingStatus === 'Pending Review').length
 
   function navigate(p, filter) { setPage(p); setPageFilter(filter||{}) }
-  function updateCase(updated)  { setCases(prev=>prev.map(c=>c.id===updated.id?updated:c)); setOpenCase(updated) }
-  function addCase(newCase)     { setCases(prev=>[newCase,...prev]) }
+  function updateCase(updated)  {
+    setCases(prev=>prev.map(c=>c.id===updated.id?updated:c))
+    setOpenCase(updated)
+    saveCase(updated)
+  }
+  function addCase(newCase) {
+    setCases(prev=>[newCase,...prev])
+    saveCase(newCase)
+    // Auto-launch induction wizard for New Employee cases
+    if (newCase.caseTypeName === 'New') {
+      setInduction(newCase)
+    }
+  }
   function addEmployer(emp, profile) {
     setEmployers(prev => [...prev, emp])
     if (profile) setBenefitProfiles(prev => ({...prev, [emp.id]: profile}))

@@ -229,3 +229,55 @@ function updateProfileCache(employerId, profile) {
     localStorage.setItem(LS_PROFILES, JSON.stringify(current))
   } catch(e) {}
 }
+
+// ── CASES ─────────────────────────────────────────────────────────────────────
+export async function fetchCases() {
+  try {
+    const { data, error } = await supabase
+      .from('cases')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) { console.error('[DB] fetchCases error:', error.message); return null }
+    console.log('[DB] fetchCases OK:', data?.length, 'cases')
+    return data || []
+  } catch(e) {
+    console.error('[DB] fetchCases exception:', e.message)
+    return null
+  }
+}
+
+export async function saveCase(c) {
+  try {
+    const row = {
+      id:             c.id,
+      ref:            c.ref,
+      employer_id:    c.employerId,
+      case_type_name: c.caseTypeName,
+      case_type_id:   c.caseTypeId,
+      workspace:      c.workspace || 'employer',
+      status:         c.status,
+      priority:       c.priority,
+      member_name:    c.memberName,
+      member_id:      c.memberId,
+      description:    c.description,
+      assigned_to:    c.assignedTo,
+      sla_date:       c.slaDate,
+      sla_days:       c.slaDays,
+      billing_trigger:c.billingTrigger || false,
+      billing_task_id:c.billingTaskId,
+      extra_fields:   c.extraFields || {},
+      workflow:       c.workflow,
+      notes:          c.notes || [],
+      audit:          c.audit || [],
+      documents:      c.documents || [],
+      escalated:      c.escalated || false,
+      created:        c.created,
+    }
+    const { error } = await supabase.from('cases').upsert(row)
+    if (error) { console.error('[DB] saveCase error:', error.message); return false }
+    return true
+  } catch(e) {
+    console.error('[DB] saveCase exception:', e.message)
+    return false
+  }
+}
