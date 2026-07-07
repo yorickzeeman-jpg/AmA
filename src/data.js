@@ -333,7 +333,121 @@ export const INITIAL_CASE_TYPES = [
   },
 ]
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── BUSINESS DAY ENGINE ─────────────────────────────────────────────────────
+// All SLA calculations use business days (Mon–Fri).
+// Public holidays can be added to SA_HOLIDAYS in YYYY-MM-DD format.
+// This list is the single source of truth for the entire portal.
+
+export const SA_HOLIDAYS = [
+  // 2025
+  '2025-01-01', // New Year's Day
+  '2025-03-21', // Human Rights Day
+  '2025-04-18', // Good Friday
+  '2025-04-21', // Family Day
+  '2025-04-27', // Freedom Day
+  '2025-05-01', // Workers Day
+  '2025-06-16', // Youth Day
+  '2025-08-09', // National Women's Day
+  '2025-09-24', // Heritage Day
+  '2025-12-16', // Day of Reconciliation
+  '2025-12-25', // Christmas Day
+  '2025-12-26', // Day of Goodwill
+  // 2026
+  '2026-01-01',
+  '2026-03-21',
+  '2026-04-03', // Good Friday 2026
+  '2026-04-06', // Family Day 2026
+  '2026-04-27',
+  '2026-05-01',
+  '2026-06-16',
+  '2026-08-10', // Women's Day observed
+  '2026-09-24',
+  '2026-12-16',
+  '2026-12-25',
+  '2026-12-26',
+]
+
+function isHoliday(dateStr) {
+  return SA_HOLIDAYS.includes(dateStr)
+}
+
+function isBusinessDay(date) {
+  const day = date.getDay() // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false
+  const str = date.toISOString().split('T')[0]
+  return !isHoliday(str)
+}
+
+// Add N business days to a date, returns YYYY-MM-DD string
+export function addBusinessDays(fromDate, days) {
+  const d = new Date(fromDate)
+  let added = 0
+  while (added < days) {
+    d.setDate(d.getDate() + 1)
+    if (isBusinessDay(d)) added++
+  }
+  return d.toISOString().split('T')[0]
+}
+
+// Count business days between two dates (from → to)
+export function businessDaysBetween(fromStr, toStr) {
+  const from = new Date(fromStr)
+  const to   = new Date(toStr)
+  if (from >= to) return 0
+  let count = 0
+  const d = new Date(from)
+  d.setDate(d.getDate() + 1)
+  while (d <= to) {
+    if (isBusinessDay(d)) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
+
+// Business days elapsed since a date (how long has a case been open)
+export function businessDaysElapsed(fromStr) {
+  return businessDaysBetween(fromStr, new Date().toISOString().split('T')[0])
+}
+
+// Business days remaining until a date (negative = overdue)
+export function businessDaysRemaining(toStr) {
+  const today = new Date().toISOString().split('T')[0]
+  if (toStr <= today) return -businessDaysBetween(toStr, today)
+  return businessDaysBetween(today, toStr)
+}
+
+// Is a date overdue (SLA date is in the past on a business day basis)
+export function isOverdue(slaDateStr) {
+  if (!slaDateStr) return false
+  return businessDaysRemaining(slaDateStr) < 0
+}
+
+// SLA health: returns 'ok' | 'warning' | 'breached'
+export function slaHealth(slaDateStr) {
+  if (!slaDateStr) return 'ok'
+  const remaining = businessDaysRemaining(slaDateStr)
+  if (remaining < 0)  return 'breached'
+  if (remaining <= 1) return 'warning'
+  return 'ok'
+}
+
+// Escalation level based on business days elapsed vs SLA
+// Day 30% of SLA: notify assigned user
+// Day 60%: notify supervisor
+// Day 100%: notify Leandre
+// Day 140%: notify General Manager
+export function escalationLevel(createdStr, slaDays) {
+  if (!createdStr || !slaDays) return null
+  const elapsed = businessDaysElapsed(createdStr)
+  const ratio   = elapsed / slaDays
+  if (ratio >= 1.4) return { level:4, label:'General Manager', color:'#7f1d1d', bg:'#fff1f2' }
+  if (ratio >= 1.0) return { level:3, label:'Leandre',         color:'#dc2626', bg:'#fff1f2' }
+  if (ratio >= 0.6) return { level:2, label:'Supervisor',      color:'#d97706', bg:'#fffbeb' }
+  if (ratio >= 0.3) return { level:1, label:'Assigned User',   color:'#1e5fd9', bg:'#eff6ff' }
+  return null
+}
+
+// ─── LEGACY HELPERS (kept for backwards compat) ──────────────────────────────
 function daysAgo(n) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]
 }
@@ -349,11 +463,12 @@ export function genRef(prefix='AEB') {
 export function calcSlaDate(caseType) {
   const d = new Date()
   if (caseType.slaUnit === 'hours') {
+    // Hours-based SLA — still uses calendar time
     d.setTime(d.getTime() + (caseType.slaValue || 48) * 3600000)
-  } else {
-    d.setDate(d.getDate() + (caseType.slaDays || 5))
+    return d.toISOString().split('T')[0]
   }
-  return d.toISOString().split('T')[0]
+  // Business days SLA
+  return addBusinessDays(d.toISOString().split('T')[0], caseType.slaDays || 5)
 }
 
 // Auto-allocate a case type to a user based on allocation rules
@@ -420,14 +535,17 @@ export const PRIORITIES = ['Low','Medium','High','Critical']
 
 export function slaStatus(slaDate, status) {
   if (['Completed','Closed','Billing Complete'].includes(status)) return 'done'
-  const diff = Math.ceil((new Date(slaDate) - new Date()) / 86400000)
-  if (diff < 0)  return 'overdue'
-  if (diff === 0) return 'today'
-  if (diff <= 2)  return 'warning'
+  if (!slaDate) return 'ok'
+  const remaining = businessDaysRemaining(slaDate)
+  if (remaining < 0)  return 'overdue'
+  if (remaining === 0) return 'today'
+  if (remaining <= 1)  return 'warning'
   return 'ok'
 }
+
 export function slaDiff(slaDate) {
-  return Math.ceil((new Date(slaDate) - new Date()) / 86400000)
+  if (!slaDate) return 99
+  return businessDaysRemaining(slaDate)
 }
 
 // ─── INITIAL CASES ────────────────────────────────────────────────────────────

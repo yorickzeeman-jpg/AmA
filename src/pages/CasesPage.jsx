@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import {
-  T, genRef, calcSlaDate, allocateCase,
+  T, genRef, calcSlaDate, allocateCase, addBusinessDays,
   WORKFLOW_TEMPLATES, WORKFLOW_CATEGORIES, CASE_TYPES_BY_CATEGORY,
   CASE_STATUSES, PRIORITIES, STEP_STATUS_CONFIG,
   initWorkflow, workflowProgress, currentStep,
@@ -263,7 +263,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       memberId:   form.memberId||null,
       currentStage:0, stageHistory:[],
       created:today,
-      slaDate: new Date(Date.now()+5*86400000).toISOString().split('T')[0],
+      slaDate: addBusinessDays(new Date().toISOString().split('T')[0], slaDays),
       description: form.description,
       extraFields:  form.extraFields || {},
       billingTaskId:null,

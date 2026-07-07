@@ -1,45 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
-import { T } from '../data.js'
+import { T, businessDaysElapsed, businessDaysRemaining, escalationLevel } from '../data.js'
 import { Card, Btn } from '../ui.jsx'
 
-// ═════════════════════════════════════════════════════════════════════════════
-// LEANDRE AI — Operations Monitoring Engine
-//
-// NOT a chatbot. An operational oversight engine.
-//
-// Responsibilities:
-//   1. Monitor open cases & workflow progress
-//   2. Monitor SLA breaches
-//   3. Monitor billing queue
-//   4. Monitor staff workloads
-//   5. Monitor employer service levels
-//   6. Identify bottlenecks
-//   7. Escalate delays
-//   8. Generate daily operations report → email to Leandre
-// ═════════════════════════════════════════════════════════════════════════════
-
-// ─── ESCALATION RULES ────────────────────────────────────────────────────────
-// Day 1: Notify assigned user
-// Day 3: Notify supervisor
-// Day 5: Notify Leandre
-// Day 7: Notify General Manager
-
-function daysSince(dateStr) {
-  if (!dateStr) return 0
-  const diff = new Date() - new Date(dateStr)
-  return Math.floor(diff / (1000 * 60 * 60 * 24))
-}
-
-function getEscalationLevel(c) {
-  const days = daysSince(c.created)
-  const sla  = c.slaDays || 5
-  const ratio = days / sla
-  if (ratio >= 1.4)  return { level: 4, label: 'General Manager', color: '#7f1d1d', bg: '#fff1f2' }
-  if (ratio >= 1.0)  return { level: 3, label: 'Leandre',         color: '#dc2626', bg: '#fff1f2' }
-  if (ratio >= 0.6)  return { level: 2, label: 'Supervisor',       color: '#d97706', bg: '#fffbeb' }
-  if (ratio >= 0.3)  return { level: 1, label: 'Assigned User',    color: '#1e5fd9', bg: '#eff6ff' }
-  return null
-}
+// ── Business day wrappers ─────────────────────────────────────────────────────
+function daysSince(dateStr) { return businessDaysElapsed(dateStr) }
+function getEscalationLevel(c) { return escalationLevel(c.created, c.slaDays || 5) }
 
 function getHealthScore(stats) {
   let score = 100
@@ -103,7 +68,7 @@ export default function LeandreAI({ cases, billingTasks, employers, users, curre
 
     const slaBreached = open.filter(c => {
       if (!c.slaDate) return false
-      return new Date(c.slaDate) < new Date()
+      return businessDaysRemaining(c.slaDate) < 0
     })
 
     const noActivity = open.filter(c => daysSince(c.created) >= 3 && (!c.audit || c.audit.length <= 1))
