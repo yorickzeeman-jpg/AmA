@@ -9,8 +9,9 @@ const INTERNAL_NAV = [
   { id:'email_intake',   label:'Case from Email', icon:'send'      },
   { id:'billing',        label:'Billing',         icon:'sla'       },
   { id:'employers',      label:'Employers',       icon:'employers' },
-  { id:'reports',        label:'Reports',         icon:'reports'   },
-  { id:'leandre_ai',    label:'Leandre AI',       icon:'dashboard' },
+  { id:'reports',           label:'Reports',            icon:'reports'   },
+  { id:'financial_insight', label:'Financial Insight',  icon:'dashboard' },
+  { id:'leandre_ai',        label:'Leandre AI',         icon:'dashboard' },
 ]
 const EMPLOYER_NAV = [
   { id:'dashboard',  label:'Dashboard',      icon:'dashboard' },

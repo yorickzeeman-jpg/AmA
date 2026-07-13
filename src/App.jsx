@@ -19,6 +19,7 @@ import EmployerManagement from './pages/admin/EmployerManagement.jsx'
 import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
 import SLAConfig from './pages/admin/SLAConfig.jsx'
 import LeandreAI from './pages/LeandreAI.jsx'
+import FinancialInsight from './pages/FinancialInsight.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
 function normCase(row) {
@@ -72,6 +73,7 @@ export default function App() {
   const [inductionCase, setInduction] = useState(null)
   const [selectedBenefitEmp, setSelectedBenefitEmp] = useState(null)
   const [openProfileEmp, setOpenProfileEmp]         = useState(null)
+  const [financialInsightMember, setFIMember]        = useState(null)
   // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
   const [workflowConfig, setWorkflowConfig] = useState(() => {
     try {
@@ -254,6 +256,12 @@ export default function App() {
           {page==='leandre_ai' && (isGM || role==='administrator') && (
             <LeandreAI cases={cases} billingTasks={billingTasks} employers={employers} users={users} currentUser={user}/>
           )}
+          {page==='financial_insight' && (
+            <div style={{ padding:24 }}>
+              <h1 style={{ fontSize:20, fontWeight:800, color:T.text, marginBottom:8 }}>Financial Insight</h1>
+              <p style={{ color:T.gray, fontSize:13, marginBottom:20 }}>Open a member record or case to launch the Financial Insight Engine.</p>
+            </div>
+          )}
           {/* Admin */}
           {page==='admin_users'      && <UserManagement     users={users} onUpdateUsers={setUsers}/>}
           {page==='admin_roles'      && <RolesPage/>}
@@ -312,6 +320,20 @@ export default function App() {
               priority: 'Medium', createdBy: user.id, created: new Date().toISOString(),
             })
             setInduction(null)
+          }}
+        />
+      )}
+
+      {financialInsightMember && (
+        <FinancialInsight
+          member={financialInsightMember}
+          employer={employers.find(e => e.id === financialInsightMember.employerId)}
+          benefitProfile={benefitProfiles[financialInsightMember.employerId]}
+          currentUser={user}
+          onClose={() => setFIMember(null)}
+          onCreateAction={(action) => {
+            // Wire into workflow engine as a task
+            console.log('[FinancialInsight] Action created:', action)
           }}
         />
       )}
