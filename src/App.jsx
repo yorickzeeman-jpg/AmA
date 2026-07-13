@@ -20,6 +20,7 @@ import WorkflowConfig from './pages/admin/WorkflowConfig.jsx'
 import SLAConfig from './pages/admin/SLAConfig.jsx'
 import LeandreAI from './pages/LeandreAI.jsx'
 import FinancialInsight from './pages/FinancialInsight.jsx'
+import FinancialConsultation from './pages/FinancialConsultation.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
 function normCase(row) {
@@ -74,6 +75,7 @@ export default function App() {
   const [selectedBenefitEmp, setSelectedBenefitEmp] = useState(null)
   const [openProfileEmp, setOpenProfileEmp]         = useState(null)
   const [financialInsightMember, setFIMember]        = useState(null)
+  const [financialConsultCase, setFCCase]             = useState(null)
   // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
   const [workflowConfig, setWorkflowConfig] = useState(() => {
     try {
@@ -283,6 +285,7 @@ export default function App() {
           onUpdate={updateCase}
           onAddBillingTask={addBillingTask}
           onLaunchInduction={(c) => setInduction(c)}
+          onLaunchConsultation={(c) => setFCCase(c)}
         />
       )}
 
@@ -320,6 +323,21 @@ export default function App() {
               priority: 'Medium', createdBy: user.id, created: new Date().toISOString(),
             })
             setInduction(null)
+          }}
+        />
+      )}
+
+      {financialConsultCase && (
+        <FinancialConsultation
+          caseData={financialConsultCase}
+          employer={employers.find(e=>e.id===financialConsultCase.employerId)}
+          benefitProfile={benefitProfiles[financialConsultCase.employerId]}
+          currentUser={user}
+          onClose={()=>setFCCase(null)}
+          onComplete={(result)=>{
+            console.log('[FinancialConsultation] Complete:', result)
+            updateCase({...financialConsultCase, status:'Consultation Complete', consultationResult:result})
+            setFCCase(null)
           }}
         />
       )}

@@ -6,7 +6,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
-export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction }) {
+export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation }) {
   const [tab, setTab]   = useState('Overview')
   const [note, setNote] = useState('')
 
@@ -184,17 +184,33 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                 </div>
               )}
 
-              {/* Digital Induction button for New Employee cases */}
-              {c.caseTypeName === 'New' && onLaunchInduction && (
-                <div style={{ background:'linear-gradient(135deg,#1e3a5f,#e8680a)', borderRadius:11, padding:'16px 18px', color:'#fff' }}>
-                  <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>🎯 Digital Induction Wizard</div>
-                  <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
-                    Capture all member information once — automatically populates benefit forms, beneficiary nominations and medical aid application.
-                  </div>
-                  <button onClick={() => onLaunchInduction(c)}
-                    style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:'#e8680a', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-                    ⚡ Launch Induction Wizard →
-                  </button>
+              {/* Digital Induction + Financial Consultation for New Employee cases */}
+              {c.caseTypeName === 'New' && (onLaunchInduction || onLaunchConsultation) && (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {onLaunchConsultation && (
+                    <div style={{ background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>📊 Financial Consultation Workspace</div>
+                      <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
+                        Guided 7-step consultation — loads employer benefits automatically, calculates contributions, checks underwriting, projects retirement, generates adviser insights and creates actions.
+                      </div>
+                      <button onClick={() => onLaunchConsultation(c)}
+                        style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:T.navy, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                        ⚡ Launch Consultation →
+                      </button>
+                    </div>
+                  )}
+                  {onLaunchInduction && (
+                    <div style={{ background:`linear-gradient(135deg,#059669,#047857)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>🎯 Digital Induction Wizard</div>
+                      <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
+                        Capture personal details, benefits, beneficiaries and obtain digital signature.
+                      </div>
+                      <button onClick={() => onLaunchInduction(c)}
+                        style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:'#059669', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                        ⚡ Launch Induction Wizard →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
