@@ -154,29 +154,61 @@ export default function InductionWizard({ caseData, employer, benefitProfile, us
   }
 
   // Signature canvas
+  const sigDrawingRef = useRef(false)
+
+  function getPos(e, canvas) {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    if (e.touches) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top)  * scaleY,
+      }
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top)  * scaleY,
+    }
+  }
+
   function startSig(e) {
+    e.preventDefault()
+    sigDrawingRef.current = true
     setSigDraw(true)
     const canvas = sigCanvasRef.current
     const ctx    = canvas.getContext('2d')
-    const rect   = canvas.getBoundingClientRect()
+    const pos    = getPos(e, canvas)
     ctx.beginPath()
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
+    ctx.moveTo(pos.x, pos.y)
   }
+
   function drawSig(e) {
-    if (!sigDrawing) return
+    e.preventDefault()
+    if (!sigDrawingRef.current) return
     const canvas = sigCanvasRef.current
     const ctx    = canvas.getContext('2d')
-    const rect   = canvas.getBoundingClientRect()
-    ctx.lineWidth = 2
+    const pos    = getPos(e, canvas)
+    ctx.lineWidth   = 2.5
     ctx.strokeStyle = '#1e3a5f'
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
+    ctx.lineCap     = 'round'
+    ctx.lineJoin    = 'round'
+    ctx.lineTo(pos.x, pos.y)
     ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
     setHasSig(true)
   }
-  function endSig() { setSigDraw(false) }
+
+  function endSig(e) {
+    e?.preventDefault()
+    sigDrawingRef.current = false
+    setSigDraw(false)
+  }
+
   function clearSig() {
     const canvas = sigCanvasRef.current
-    canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height)
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
     setHasSig(false)
   }
 
@@ -482,8 +514,9 @@ export default function InductionWizard({ caseData, employer, benefitProfile, us
                 </div>
                 <div style={{ position:'relative' }}>
                   <canvas ref={sigCanvasRef} width={480} height={120}
-                    style={{ border:`2px solid ${hasSig?T.green:T.border}`, borderRadius:8, background:'#fff', cursor:'crosshair', display:'block', touchAction:'none' }}
-                    onMouseDown={startSig} onMouseMove={drawSig} onMouseUp={endSig} onMouseLeave={endSig}/>
+                    style={{ border:`2px solid ${hasSig?T.green:T.border}`, borderRadius:8, background:'#fff', cursor:'crosshair', display:'block', touchAction:'none', width:'100%' }}
+                    onMouseDown={startSig} onMouseMove={drawSig} onMouseUp={endSig} onMouseLeave={endSig}
+                    onTouchStart={startSig} onTouchMove={drawSig} onTouchEnd={endSig}/>
                   <div style={{ position:'absolute', bottom:8, left:10, fontSize:10, color:'#d1d5db', pointerEvents:'none' }}>
                     {hasSig ? '' : 'Sign here'}
                   </div>
