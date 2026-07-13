@@ -208,8 +208,15 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
 
   // Derived values
   const age        = calcAgeFromId(member.idNumber) || calcAgeFromDOB(member.dob)
+  const ageForCalc = age || 30  // Default to 30 if age unknown
   const retAge     = benefitProfile?.retirementFund?.normalRetirementAge || benefitProfile?.retirementAge || 65
   const salaryNum  = parseFloat(String(member.salary).replace(/[^0-9.]/g,'')) || 0
+
+  // Debug log on every render so we can trace the data flow
+  if (salaryNum > 0) {
+    console.log('[FC] salary:', salaryNum, '| age:', age, '| ageForCalc:', ageForCalc, '| retAge:', retAge, '| step:', stepIdx)
+  }
+
   const contribs   = salaryNum>0 ? calcContributions(salaryNum, benefitProfile, member.category) : null
   const uw         = salaryNum>0 ? calcUW(salaryNum, benefitProfile) : null
 
@@ -220,8 +227,8 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
     journey.hasTFSA         && {label:'Tax Free Savings',        value:journey.tfsaValue},
   ].filter(Boolean)
 
-  const projection = (salaryNum>0 && age && contribs)
-    ? projectFund(age, retAge, salaryNum, contribs.net, existingFunds, assumptions)
+  const projection = (salaryNum>0 && contribs)
+    ? projectFund(ageForCalc, retAge, salaryNum, contribs.net, existingFunds, assumptions)
     : null
 
   // Auto-generate insights
@@ -485,8 +492,13 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
           {/* ── STEP 5: RETIREMENT PROJECTION ── */}
           {step.id==='projection' && (
             <div>
-              {!projection ? (
-                <div style={{textAlign:'center',padding:40,color:T.gray,fontSize:13}}>Enter salary on Step 1 to generate projections.</div>
+              {!salaryNum ? (
+                <div style={{textAlign:'center',padding:40,color:T.gray}}>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text,marginBottom:6}}>Salary not entered</div>
+                  <div style={{fontSize:12}}>Go back to Step 1 and enter the member's monthly salary.</div>
+                </div>
+              ) : !projection ? (
+                <div style={{textAlign:'center',padding:40,color:T.gray,fontSize:13}}>Calculating projection...</div>
               ) : (
                 <>
                   {/* Assumptions */}
@@ -540,8 +552,6 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
               )}
             </div>
           )}
-
-          {/* ── STEP 6: ADVISER INSIGHTS ── */}
           {step.id==='insights' && (
             <div>
               <div style={{fontSize:12,color:T.gray,marginBottom:14}}>
