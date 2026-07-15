@@ -21,6 +21,8 @@ import SLAConfig from './pages/admin/SLAConfig.jsx'
 import LeandreAI from './pages/LeandreAI.jsx'
 import FinancialInsight from './pages/FinancialInsight.jsx'
 import FinancialConsultation from './pages/FinancialConsultation.jsx'
+import FuneralClaims from './pages/FuneralClaims.jsx'
+import FuneralClaims from './pages/FuneralClaims.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
 function normCase(row) {
@@ -76,6 +78,7 @@ export default function App() {
   const [openProfileEmp, setOpenProfileEmp]         = useState(null)
   const [financialInsightMember, setFIMember]        = useState(null)
   const [financialConsultCase, setFCCase]             = useState(null)
+  const [showFuneralClaims, setFuneralClaims]         = useState(false)
   // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
   const [workflowConfig, setWorkflowConfig] = useState(() => {
     try {
@@ -140,6 +143,22 @@ export default function App() {
     }
   }
   function addEmployer(emp, profile) {
+    // If an employer with this name already exists, UPDATE it instead of duplicating.
+    // Re-uploading an inhouse pack must refresh the existing profile, keeping the
+    // original employer id so members/cases stay linked.
+    const existing = employers.find(e =>
+      e.name.trim().toLowerCase() === emp.name.trim().toLowerCase()
+    )
+    if (existing) {
+      const merged = { ...existing, ...emp, id: existing.id, number: existing.number || emp.number }
+      const linkedProfile = profile ? { ...profile, employerId: existing.id } : null
+      console.log('[App] addEmployer: updating existing employer', existing.id, existing.name)
+      setEmployers(prev => prev.map(e => e.id === existing.id ? merged : e))
+      if (linkedProfile) setBenefitProfiles(prev => ({...prev, [existing.id]: linkedProfile}))
+      saveEmployer(merged)
+      if (linkedProfile) saveBenefitProfile(existing.id, linkedProfile)
+      return
+    }
     setEmployers(prev => [...prev, emp])
     if (profile) setBenefitProfiles(prev => ({...prev, [emp.id]: profile}))
     // Persist to Supabase
@@ -255,6 +274,60 @@ export default function App() {
             />
           )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}
+          {page==='funeral_claims' && (
+            <FuneralClaims
+              employers={employers}
+              members={members}
+              benefitProfiles={benefitProfiles}
+              users={users}
+              currentUser={user}
+              cases={cases}
+              onAddCase={addCase}
+              onAddBillingTask={addBillingTask}
+            />
+          )}
+          {page==='funeral_claims' && (
+            <div style={{ padding:'0 0 16px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <div>
+                  <h1 style={{ fontSize:20, fontWeight:800, color:T.text, margin:'0 0 3px' }}>Funeral Claims</h1>
+                  <p style={{ margin:0, fontSize:12, color:T.gray }}>Register and manage funeral benefit claims</p>
+                </div>
+                <button onClick={() => setFuneralClaims(true)}
+                  style={{ padding:'10px 20px', background:T.orange, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                  + Register Claim
+                </button>
+              </div>
+              {cases.filter(c=>c.type==='funeral_claim').length === 0 ? (
+                <div style={{ textAlign:'center', padding:60, color:T.gray, background:'#fff', borderRadius:12, border:`1px solid ${T.border}` }}>
+                  <div style={{ fontSize:15, fontWeight:600, color:T.text, marginBottom:6 }}>No funeral claims registered</div>
+                  <div style={{ fontSize:12, marginBottom:16 }}>Register a new funeral claim to get started.</div>
+                  <button onClick={() => setFuneralClaims(true)} style={{ padding:'10px 24px', background:T.orange, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Register Claim</button>
+                </div>
+              ) : (
+                <div style={{ background:'#fff', borderRadius:12, border:`1px solid ${T.border}`, overflow:'hidden' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                    <thead><tr style={{ background:'#f9fafb', borderBottom:`1px solid ${T.border}` }}>
+                      {['Ref','Type','Member','Employer','Allocated To','Status','Created'].map(h=>(
+                        <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase' }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>{cases.filter(c=>c.type==='funeral_claim').map(c=>(
+                      <tr key={c.id} style={{ borderBottom:'1px solid #f9fafb' }}>
+                        <td style={{ padding:'10px 14px', fontFamily:'monospace', fontSize:11, color:T.blue, fontWeight:700 }}>{c.ref}</td>
+                        <td style={{ padding:'10px 14px', fontSize:12 }}>{c.claimType==='main_member'?'Main Member':'Extended Family'}</td>
+                        <td style={{ padding:'10px 14px', fontSize:12, fontWeight:600 }}>{c.memberName}</td>
+                        <td style={{ padding:'10px 14px', fontSize:12, color:T.gray }}>{c.employerName}</td>
+                        <td style={{ padding:'10px 14px', fontSize:12 }}>{c.assignedName||'—'}</td>
+                        <td style={{ padding:'10px 14px' }}><span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:'#eff6ff', color:T.blue }}>{c.status}</span></td>
+                        <td style={{ padding:'10px 14px', fontSize:11, color:T.gray }}>{c.created}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
           {page==='leandre_ai' && (isGM || role==='administrator') && (
             <LeandreAI cases={cases} billingTasks={billingTasks} employers={employers} users={users} currentUser={user}/>
           )}
@@ -323,6 +396,22 @@ export default function App() {
               priority: 'Medium', createdBy: user.id, created: new Date().toISOString(),
             })
             setInduction(null)
+          }}
+        />
+      )}
+
+      {showFuneralClaims && (
+        <FuneralClaims
+          employers={employers}
+          benefitProfiles={benefitProfiles}
+          members={members}
+          cases={cases}
+          users={users}
+          currentUser={user}
+          onClose={() => setFuneralClaims(false)}
+          onRegisterClaim={(claim) => {
+            addCase(claim)
+            setFuneralClaims(false)
           }}
         />
       )}

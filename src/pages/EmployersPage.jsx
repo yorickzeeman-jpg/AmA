@@ -128,6 +128,15 @@ function apiResultToProfile(d) {
       ratePerMember:    d.funeralRatePerMember,
       principalCover:   d.funeralPrincipalCover || 0,
     } : null,
+    // funeralCover is the key read by EmployerProfile, FuneralClaims and consultations
+    funeralCover: d.funeralRatePerMember ? {
+      scheme:        '',
+      administrator: d.fundAdministrator || '',
+      memberPremium: d.funeralRatePerMember,
+      memberCover:   d.funeralPrincipalCover || 0,
+      spouseCover:   d.funeralPrincipalCover || 0,
+      childCover:    0,
+    } : null,
     disability: {
       rate:                       d.phiRate || 0,
       waitingPeriodMonths:        d.phiWaitingPeriodMonths || 0,
@@ -143,7 +152,6 @@ function apiResultToProfile(d) {
       paymentMethod: d.paymentMethod || '',
       compulsory:    d.compulsory || false,
     },
-    funeralCover: null,
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { T } from '../data.js'
 import { inputSt, selectSt } from '../ui.jsx'
 
@@ -248,15 +248,17 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
     return list
   }, [projection, uw, journey, member.firstName, existingFunds.length])
 
-  // Auto-add UW action when detected
+  // Auto-add UW action when detected (must run in effect, not during render)
   const uwActionAdded = useRef(false)
-  if (uw?.required && !uwActionAdded.current && stepIdx>=2) {
-    uwActionAdded.current = true
-    setActions(prev => prev.find(a=>a.type==='Medical Underwriting') ? prev : [...prev, {
-      id: crypto.randomUUID(), type:'Medical Underwriting', priority:'High',
-      note:'GLA benefit exceeds free cover limit', status:'Pending', created:new Date().toISOString().split('T')[0]
-    }])
-  }
+  useEffect(() => {
+    if (uw?.required && !uwActionAdded.current && stepIdx >= 2) {
+      uwActionAdded.current = true
+      setActions(prev => prev.find(a=>a.type==='Medical Underwriting') ? prev : [...prev, {
+        id: crypto.randomUUID(), type:'Medical Underwriting', priority:'High',
+        note:'GLA benefit exceeds free cover limit', status:'Pending', created:new Date().toISOString().split('T')[0]
+      }])
+    }
+  }, [uw?.required, stepIdx])
 
   function addAction(type, note='') {
     if (actions.find(a=>a.type===type)) return
