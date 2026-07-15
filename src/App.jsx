@@ -22,7 +22,6 @@ import LeandreAI from './pages/LeandreAI.jsx'
 import FinancialInsight from './pages/FinancialInsight.jsx'
 import FinancialConsultation from './pages/FinancialConsultation.jsx'
 import FuneralClaims from './pages/FuneralClaims.jsx'
-import FuneralClaims from './pages/FuneralClaims.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
 function normCase(row) {
@@ -274,18 +273,6 @@ export default function App() {
             />
           )}
           {page==='reports'    && <ReportsPage   {...sharedProps}/>}
-          {page==='funeral_claims' && (
-            <FuneralClaims
-              employers={employers}
-              members={members}
-              benefitProfiles={benefitProfiles}
-              users={users}
-              currentUser={user}
-              cases={cases}
-              onAddCase={addCase}
-              onAddBillingTask={addBillingTask}
-            />
-          )}
           {page==='funeral_claims' && (
             <div style={{ padding:'0 0 16px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
