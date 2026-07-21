@@ -170,12 +170,27 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                         claim_number:      'Claim Number',
                         date_claim_paid:   'Date Claim Paid',
                         claim_status:      'Claim Status',
+                        deceased_name:     'Deceased Name',
+                        deceased_id:       'Deceased ID',
+                        claimant_name:     'Claimant Name',
+                        claimant_id:       'Claimant ID',
+                        funeral_parlour:   'Funeral Parlour',
+                        funeral_date:      'Funeral Date',
+                        funeral_cost:      'Funeral Cost',
+                        claim_type:        'Claim Type',
+                        uploaded_docs:     'Documents Checked',
                       }[key] || key
+                      // Render primitives only — objects/arrays are stringified safely (React error #31 guard)
+                      const display = Array.isArray(val)
+                        ? val.map(v => typeof v === 'object' ? (v?.name || JSON.stringify(v)) : String(v)).join(', ')
+                        : typeof val === 'object'
+                        ? JSON.stringify(val)
+                        : String(val)
                       return (
                         <div key={key}>
                           <div style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', marginBottom:3 }}>{label}</div>
                           <div style={{ fontSize:13, fontWeight:key==='amount_paid'?800:500, color:key==='amount_paid'?T.red:T.text }}>
-                            {key==='amount_paid' ? `R${Number(val).toLocaleString()}` : val}
+                            {key==='amount_paid' ? `R${Number(val).toLocaleString()}` : display}
                           </div>
                         </div>
                       )

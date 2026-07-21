@@ -140,6 +140,41 @@ function Insight({text, type}) {
   return <div style={{padding:'10px 14px',background:c.bg,border:`1px solid ${c.border}`,borderRadius:9,marginBottom:8,fontSize:13,color:c.color,lineHeight:1.6}}>{text}</div>
 }
 
+// Discovery-style dual ring: dark goal track + pink/green progress arc,
+// projected income and income goal in the centre
+function GoalRing({ projected, goal, planActive, size=210 }) {
+  const pct  = goal>0 ? Math.min(projected/goal, 1) : 0
+  const met  = pct >= 0.999
+  const r    = size*0.39, sw = size*0.062, circ = 2*Math.PI*r
+  const arc  = circ * pct
+  const clr  = met ? '#059669' : '#e8536f'
+  const big  = size >= 190
+  return (
+    <div style={{ textAlign:'center' }}>
+      <div style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:size, height:size }}>
+        <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e9edf3" strokeWidth={sw}/>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1e3a5f" strokeWidth={sw}
+            strokeDasharray={`${circ} ${circ}`} opacity="0.18"/>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={clr} strokeWidth={sw}
+            strokeDasharray={`${arc} ${circ}`} strokeLinecap="round"
+            style={{ transition:'stroke-dasharray .7s ease, stroke .4s ease' }}/>
+        </svg>
+        <div style={{ position:'absolute', textAlign:'center' }}>
+          <div style={{ fontSize:big?11:9, color:'#6b7280', marginBottom:1 }}>Projected Income</div>
+          <div style={{ fontSize:big?24:16, fontWeight:900, color:'#1e5fd9', lineHeight:1.15 }}>{R(projected)}</div>
+          <div style={{ fontSize:big?10.5:8.5, color:'#6b7280', marginTop:big?5:3 }}>Income Goal</div>
+          <div style={{ fontSize:big?14:11, fontWeight:700, color:'#1e3a5f' }}>{R(goal)}</div>
+          {planActive && <div style={{ fontSize:big?9:8, fontWeight:700, color:'#059669', marginTop:3, textTransform:'uppercase', letterSpacing:'0.5px' }}>Plan applied</div>}
+        </div>
+      </div>
+      <div style={{ fontSize:12, fontWeight:700, color:clr, marginTop:2 }}>
+        {met ? 'On track to meet your goal' : `${Math.round(pct*100)}% of income goal`}
+      </div>
+    </div>
+  )
+}
+
 function FundingGauge({ratio}) {
   const clr = ratio>=90?'#059669':ratio>=70?'#d97706':'#dc2626'
   const lbl = ratio>=90?'On Track':ratio>=70?'Needs Attention':'Behind Target'
@@ -199,6 +234,11 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
     growth:9.0, escalation:5.5, inflation:5.0, drawdown:5.0, targetPct:75
   })
 
+  // Discovery-style journey: income goal in Rands + selected contribution plan
+  const [incomeGoal, setIncomeGoal]   = useState(null)   // null → derive from targetPct
+  const [selectedPlan, setSelPlan]    = useState(null)
+  const [journeyPhase, setPhase]      = useState(1)      // 1 goal · 2 tracking · 3 plans
+
   // ── ACTIONS ──────────────────────────────────────────────────────────────
   const [actions, setActions] = useState([])
   const [adviserNotes, setNotes] = useState('')
@@ -230,6 +270,48 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
   const projection = (salaryNum>0 && contribs)
     ? projectFund(ageForCalc, retAge, salaryNum, contribs.net, existingFunds, assumptions)
     : null
+
+  // ── DISCOVERY-STYLE JOURNEY ENGINE ────────────────────────────────────────
+  // Effective income goal in today's Rands
+  const effectiveGoal = incomeGoal ?? (salaryNum>0 ? salaryNum*(assumptions.targetPct/100) : 0)
+
+  // Project with a contribution plan: +extraPct of salary per year for planYears,
+  // on top of existing contributions, applied on salary-increase dates
+  function projectPlan(extraPct, planYears, delayRet=0) {
+    if (!(salaryNum>0) || !contribs) return null
+    const years = (retAge+delayRet) - ageForCalc
+    if (years<=0) return null
+    const mRate   = assumptions.growth/100/12
+    const basePct = contribs.net / salaryNum
+    let salary = salaryNum, extra = 0, fv = 0
+    for (let m=0; m<years*12; m++) {
+      fv = (fv + salary*(basePct+extra)) * (1+mRate)
+      if (m%12===11) {
+        salary *= (1+assumptions.escalation/100)
+        if ((m+1)/12 <= planYears) extra += extraPct/100
+      }
+    }
+    const existFV  = existingFunds.reduce((s,f)=>s+(f.value||0)*Math.pow(1+assumptions.growth/100,years),0)
+    const total    = fv + existFV
+    const todayVal = total / Math.pow(1+assumptions.inflation/100,years)
+    const monthlyInc = todayVal*assumptions.drawdown/100/12
+    return { total, todayVal, monthlyInc, extraPct, planYears, delayRet }
+  }
+
+  // Tailored plans (Discovery Contribution Optimiser model)
+  const plans = useMemo(() => {
+    if (!projection) return []
+    return [
+      { id:'p1', label:'1% per year, for 5 years',  sub:'Gentle increase on salary increase dates',  ...(projectPlan(1,5)||{}) },
+      { id:'p2', label:'2% per year, for 7 years',  sub:'Steady increase on salary increase dates',  ...(projectPlan(2,7)||{}) },
+      { id:'p3', label:'4% per year, for 4 years',  sub:'Accelerated catch-up',                       ...(projectPlan(4,4)||{}) },
+      { id:'p4', label:`Retire at ${retAge+2}`,      sub:'Work 2 more years, same contributions',     ...(projectPlan(0,0,2)||{}) },
+    ].filter(p=>p.monthlyInc)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projection, assumptions, existingFunds, salaryNum, retAge])
+
+  const activePlan      = plans.find(p=>p.id===selectedPlan)
+  const displayedIncome = activePlan ? activePlan.monthlyInc : (projection?.monthlyInc||0)
 
   // Auto-generate insights
   const insights = useMemo(() => {
@@ -272,7 +354,7 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
 
   function completeConsultation() {
     setConsultComplete(true)
-    if (onComplete) onComplete({ member, journey, projection, insights, actions, adviserNotes })
+    if (onComplete) onComplete({ member, journey, projection, insights, actions, adviserNotes, incomeGoal: effectiveGoal, selectedPlan: activePlan?.label || null })
   }
 
   const cats = benefitProfile?.retirementFund?.contributionCategories||[]
@@ -505,7 +587,7 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
                 <>
                   {/* Assumptions */}
                   <div style={{background:'#1e293b',borderRadius:10,padding:'12px 16px',marginBottom:14,display:'flex',gap:14,flexWrap:'wrap'}}>
-                    {[['Growth %','growth'],['Escalation %','escalation'],['Inflation %','inflation'],['Drawdown %','drawdown'],['Target %','targetPct']].map(([l,k])=>(
+                    {[['Growth %','growth'],['Escalation %','escalation'],['Inflation %','inflation'],['Drawdown %','drawdown']].map(([l,k])=>(
                       <div key={k}>
                         <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',textTransform:'uppercase',marginBottom:3}}>{l}</div>
                         <input type="number" step="0.5" value={assumptions[k]} onChange={e=>setAssumptions(a=>({...a,[k]:+e.target.value}))}
@@ -514,42 +596,110 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
                     ))}
                   </div>
 
-                  <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:20,background:'#fff',borderRadius:12,padding:20,border:`1px solid ${T.border}`,marginBottom:14,alignItems:'center'}}>
-                    <FundingGauge ratio={projection.fundingRatio}/>
-                    <div>
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                        {[
-                          ['Years to Retire',   `${projection.years} years`,      T.navy],
-                          ['Net Monthly Contrib',R(contribs?.net)+'/mo',           T.blue],
-                          ['Projected Fund',     R(projection.total),              T.blue],
-                          ['Today\'s Value',     R(projection.todayVal),           '#059669'],
-                          ['Monthly Income',     R(projection.monthlyInc)+'/mo',   '#059669'],
-                          ['Monthly Gap',        projection.gap>0?R(projection.gap)+'/mo':'None', projection.gap>0?T.red:'#059669'],
-                        ].map(([l,v,c])=>(
-                          <div key={l} style={{background:'#f9fafb',borderRadius:8,padding:'10px 12px'}}>
-                            <div style={{fontSize:9,color:T.gray,textTransform:'uppercase',marginBottom:2}}>{l}</div>
-                            <div style={{fontSize:14,fontWeight:800,color:c,fontFamily:'monospace'}}>{v}</div>
-                          </div>
-                        ))}
+                  {/* Journey phase tracker */}
+                  <div style={{display:'flex',justifyContent:'center',gap:24,marginBottom:16}}>
+                    {[[1,'Set your income goal'],[2,'See how you\'re tracking'],[3,'Pick a plan to meet your goal']].map(([n,l])=>(
+                      <div key={n} onClick={()=>n<journeyPhase&&setPhase(n)} style={{display:'flex',alignItems:'center',gap:8,cursor:n<journeyPhase?'pointer':'default',opacity:n>journeyPhase?0.35:1}}>
+                        <div style={{width:30,height:30,borderRadius:'50%',background:n===journeyPhase?'linear-gradient(135deg,#7c3aed,#3b82f6)':n<journeyPhase?'#059669':'#e5e7eb',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800}}>{n<journeyPhase?'✓':n}</div>
+                        <div style={{fontSize:11.5,fontWeight:n===journeyPhase?800:600,color:n===journeyPhase?T.navy:T.gray,maxWidth:110,lineHeight:1.25}}>{l}</div>
                       </div>
-                    </div>
+                    ))}
                   </div>
 
-                  <Card title="Projection Detail" color={T.blue}>
-                    <Row label="Monthly Salary (current)"         value={R(salaryNum)+'/mo'}/>
-                    <Row label="Net Monthly Investment"           value={R(contribs?.net)+'/mo'} color={T.blue}/>
-                    {existingFunds.length>0&&<Row label="Existing Funds Total" value={R(existingFunds.reduce((s,f)=>s+f.value,0))} color={T.purple}/>}
-                    <div style={{height:6}}/>
-                    <Row label="Projected Fund at Retirement"    value={R(projection.total)}    bold color={T.blue}/>
-                    <Row label="In Today's Purchasing Power"     value={R(projection.todayVal)} bold color='#059669' sub={`Adjusted for ${assumptions.inflation}% inflation`}/>
-                    <Row label="Estimated Monthly Income"        value={R(projection.monthlyInc)+'/mo'} bold color='#059669' sub={`${assumptions.drawdown}% sustainable drawdown`}/>
-                    {projection.gap>0&&<>
-                      <div style={{height:6,borderTop:`2px solid ${T.border}`,margin:'8px 0'}}/>
-                      <Row label="Target Monthly Income"   value={R(projection.targetInc)+'/mo'}/>
-                      <Row label="Monthly Shortfall"       value={R(projection.gap)+'/mo'} bold color={T.red}/>
-                      <Row label="Annual Shortfall"        value={R(projection.annualGap)+'/yr'} color={T.red}/>
-                    </>}
-                  </Card>
+                  {/* Phone-style screen */}
+                  <div style={{maxWidth:420,margin:'0 auto',background:'#fff',border:`1px solid ${T.border}`,borderRadius:22,padding:'26px 24px',boxShadow:'0 8px 32px rgba(0,0,0,0.07)'}}>
+
+                    {/* ── SCREEN 1: SET YOUR INCOME GOAL ── */}
+                    {journeyPhase===1 && (
+                      <div>
+                        <div style={{fontSize:17,fontWeight:800,color:'#1e5fd9',marginBottom:10,lineHeight:1.3}}>Set your retirement income goal</div>
+                        <div style={{fontSize:12,color:'#374151',marginBottom:16,lineHeight:1.6}}>Set your retirement income goal and we will help you achieve it.</div>
+                        <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:8}}>If you retired today, what take home pay would you need per month?</div>
+                        <div style={{position:'relative',marginBottom:18}}>
+                          <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',fontSize:14,fontWeight:700,color:T.gray}}>R</span>
+                          <input type="number" value={Math.round(effectiveGoal)||''}
+                            onChange={e=>{
+                              const v=+e.target.value||0
+                              setIncomeGoal(v)
+                              if (salaryNum>0) setAssumptions(a=>({...a,targetPct:Math.round((v/salaryNum)*100)}))
+                            }}
+                            style={{width:'100%',padding:'11px 12px 11px 28px',border:'1.5px solid #1e5fd9',borderRadius:8,fontSize:17,fontWeight:800,fontFamily:'inherit',color:T.navy,boxSizing:'border-box'}}/>
+                        </div>
+                        <div style={{fontSize:11.5,color:'#374151',marginBottom:2}}>Retirement income goal (including growth)</div>
+                        <div style={{fontSize:17,fontWeight:800,color:'#1e5fd9',marginBottom:2}}>{R(effectiveGoal)}</div>
+                        <div style={{fontSize:11,color:'#1e5fd9',marginBottom:14}}>{salaryNum>0?((effectiveGoal/salaryNum)*100).toFixed(2):0}% of your salary</div>
+                        <div style={{fontSize:10.5,color:'#6b7280',marginBottom:20}}>We will assume this grows in line with your salary</div>
+                        <button onClick={()=>setPhase(2)}
+                          style={{width:'100%',padding:'12px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+                          Save and next: achieve your goal
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ── SCREEN 2: SEE HOW YOU'RE TRACKING ── */}
+                    {journeyPhase===2 && (
+                      <div style={{textAlign:'center'}}>
+                        <GoalRing projected={displayedIncome} goal={effectiveGoal} planActive={!!activePlan} size={230}/>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,margin:'16px 0'}}>
+                          {[
+                            ['Projected Fund', R(activePlan?activePlan.total:projection.total)],
+                            ['Monthly Gap',    displayedIncome>=effectiveGoal?'None':R(effectiveGoal-displayedIncome)+'/mo'],
+                          ].map(([l,v])=>(
+                            <div key={l} style={{background:'#f9fafb',borderRadius:8,padding:'8px 10px'}}>
+                              <div style={{fontSize:9,color:T.gray,textTransform:'uppercase',marginBottom:2}}>{l}</div>
+                              <div style={{fontSize:13,fontWeight:800,color:T.navy,fontFamily:'monospace'}}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{textAlign:'left',border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',marginBottom:16,borderLeft:'4px solid #1e5fd9'}}>
+                          <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:6}}>Tailored contribution plans</div>
+                          <div style={{fontSize:11.5,color:'#374151',lineHeight:1.55}}>On your salary increase dates, we will increase your contributions by:</div>
+                        </div>
+                        <button onClick={()=>setPhase(3)}
+                          style={{width:'100%',padding:'12px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+                          View tailored plans
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ── SCREEN 3: PICK A PLAN ── */}
+                    {journeyPhase===3 && (
+                      <div style={{textAlign:'center'}}>
+                        <GoalRing projected={displayedIncome} goal={effectiveGoal} planActive={!!activePlan} size={160}/>
+                        <div style={{textAlign:'left',border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 14px',marginTop:14,boxShadow:'0 4px 18px rgba(0,0,0,0.08)',borderLeft:'4px solid #1e5fd9'}}>
+                          <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:4}}>Tailored contribution plans</div>
+                          <div style={{fontSize:11,color:'#374151',marginBottom:12,lineHeight:1.5}}>On your salary increase dates, we will increase your contributions by:</div>
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+                            {plans.map(p=>{
+                              const selected = selectedPlan===p.id
+                              const meets    = p.monthlyInc >= effectiveGoal
+                              return (
+                                <button key={p.id} onClick={()=>setSelPlan(selected?null:p.id)}
+                                  style={{padding:'10px 10px',borderRadius:8,border:`1.5px solid ${selected?'#1e5fd9':T.border}`,background:selected?'#eff6ff':'#fafafa',cursor:'pointer',textAlign:'left',fontFamily:'inherit',transition:'all .15s'}}>
+                                  <div style={{fontSize:11.5,fontWeight:800,color:T.text,lineHeight:1.35,marginBottom:5}}>{p.label}</div>
+                                  <div style={{fontSize:12,fontWeight:900,color:meets?'#059669':'#e8536f',fontFamily:'monospace',marginBottom:4}}>{R(p.monthlyInc)}/mo</div>
+                                  <div style={{fontSize:10,fontWeight:700,color:selected?'#1e5fd9':T.gray}}>{selected?'● Selected':'○ Select'}</div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <button
+                            disabled={!activePlan}
+                            onClick={()=>{
+                              const t = `Contribution Plan: ${activePlan.label}`
+                              if (!actions.find(a=>a.type===t)) addAction(t, `Projected income ${R(activePlan.monthlyInc)}/mo vs goal ${R(effectiveGoal)}/mo`)
+                              next()
+                            }}
+                            style={{width:'100%',padding:'11px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13,fontWeight:800,cursor:activePlan?'pointer':'not-allowed',fontFamily:'inherit',opacity:activePlan?1:0.45}}>
+                            Confirm plan
+                          </button>
+                        </div>
+                        {!activePlan && displayedIncome>=effectiveGoal && (
+                          <div style={{marginTop:10,fontSize:11.5,color:'#059669',fontWeight:700}}>Already on track — no plan required. Continue with Next below.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
