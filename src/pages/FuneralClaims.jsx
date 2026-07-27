@@ -1,6 +1,7 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { T, genRef } from '../data.js'
 import { inputSt, selectSt } from '../ui.jsx'
+import { fetchFuneralEmployers, saveFuneralEmployers, fetchFuneralMembers, saveFuneralMembers } from '../supabase.js'
 
 // ═════════════════════════════════════════════════════════════════════════════
 // FUNERAL CLAIMS — Register Claim
@@ -105,9 +106,18 @@ function DocChecklist({ required, uploaded }) {
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 export default function FuneralClaims({ employers, members, benefitProfiles, users, currentUser, cases, onAddCase, onAddBillingTask }) {
-  const [step, setStep]               = useState('select')  // select | upload | search | summary | complete
+  const [step, setStep]               = useState('select')  // select | upload | search | details | summary | complete
   const [employerId, setEmployerId]   = useState('')
   const [claimType, setClaimType]     = useState(null)
+  // Participating employers & branches (funeral scheme — one scheme, many employers/branches)
+  const [schemeEmployers, setSchemeEmployers] = useState([])
+  const [schemeMembers, setSchemeMembers]     = useState([])
+  const [showMemberImport, setShowMemberImport] = useState(false)
+  const [memberImportText, setMemberImportText] = useState('')
+  const [selEmpName, setSelEmpName]   = useState('')
+  const [selBranch, setSelBranch]     = useState('')
+  const [showImport, setShowImport]   = useState(false)
+  const [importText, setImportText]   = useState('')
   const [uploadedFiles, setFiles]     = useState([])
   const [extracting, setExtracting]   = useState(false)
   const [extracted, setExtracted]     = useState(null)
@@ -131,6 +141,48 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
   const selectedType  = CLAIM_TYPES.find(t => t.id === claimType)
   const isBilling     = ['billing_admin','general_manager','administrator'].includes(currentUser.role)
 
+  // Load participating employers once
+  useEffect(() => {
+    fetchFuneralEmployers().then(setSchemeEmployers)
+    fetchFuneralMembers().then(setSchemeMembers)
+  }, [])
+
+  function importMemberList() {
+    // One member per line: Name, ID Number, Employer, Branch[, Region] — straight from Excel
+    const rows = memberImportText.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+      const parts = line.split(/\t|,|;/).map(p => p.trim().replace(/^["']|["']$/g,''))
+      return { id: crypto.randomUUID(), name: parts[0]||'', id_number: (parts[1]||'').replace(/\D/g,'')||null, employer: parts[2]||null, branch: parts[3]||null, region: parts[4]||null, status:'active' }
+    }).filter(r => r.name && !['name','member','main member'].includes(r.name.toLowerCase()))
+    if (!rows.length) return
+    setSchemeMembers(prev => [...prev, ...rows])
+    saveFuneralMembers(rows)
+    setMemberImportText(''); setShowMemberImport(false)
+  }
+
+  // Unique employer names (filtered by search) and branches for the selected employer
+  const branchesForSelected = useMemo(() =>
+    [...new Set(schemeEmployers.filter(r => r.name === selEmpName && r.branch).map(r => r.branch))].sort(),
+    [schemeEmployers, selEmpName]
+  )
+
+  // Auto-link AEB employer record by name match (loads cover details when available)
+  useEffect(() => {
+    if (!selEmpName) { setEmployerId(''); return }
+    const match = employers.find(e => e.name.trim().toUpperCase() === selEmpName.trim().toUpperCase())
+    setEmployerId(match?.id || '')
+  }, [selEmpName, employers])
+
+  function importEmployerList() {
+    const rows = importText.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+      const parts = line.split(/\t|,|;/).map(p => p.trim().replace(/^["']|["']$/g,''))
+      return { id: crypto.randomUUID(), name: parts[0]||'', branch: parts[1]||null, region: parts[2]||null, status:'active' }
+    }).filter(r => r.name && r.name.toLowerCase() !== 'employer' && r.name.toLowerCase() !== 'name')
+    if (!rows.length) return
+    setSchemeEmployers(prev => [...prev, ...rows])
+    saveFuneralEmployers(rows)
+    setImportText(''); setShowImport(false)
+  }
+
   // Round-robin allocation to claims administrators
   const claimsAdmins = users.filter(u => ['administrator','general_manager'].includes(u.role) && u.status === 'active')
   function allocateClaim() {
@@ -146,14 +198,27 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
     if (!searchQuery || searchQuery.length < 3) return []
     const q = searchQuery.toLowerCase()
     const empMembers = (members||[]).filter(m => !employerId || m.employerId === employerId)
-    return empMembers.filter(m =>
+    const aebHits = empMembers.filter(m =>
       m.memberName?.toLowerCase().includes(q) ||
       m.surname?.toLowerCase().includes(q) ||
       m.idNumber?.includes(q) ||
       m.payrollNumber?.toLowerCase().includes(q) ||
       m.membershipNo?.includes(q)
-    ).slice(0, 8)
-  }, [searchQuery, members, employerId])
+    )
+    // Scheme main members (imported with branches) — normalized to the same shape
+    const schemeHits = schemeMembers.filter(m =>
+      (!selEmpName || !m.employer || m.employer === selEmpName) &&
+      (m.name?.toLowerCase().includes(q) || m.id_number?.includes(q) ||
+       m.member_number?.toLowerCase?.().includes(q) || m.payroll_number?.toLowerCase?.().includes(q))
+    ).map(m => ({
+      id: m.id, memberName: m.name, surname: '', idNumber: m.id_number,
+      payrollNumber: m.payroll_number || '', membershipNo: m.member_number || '',
+      benefitCategory: m.employer || '',
+      status: 'Scheme Member', effectiveDate: '', monthlyPremium: null,
+      schemeEmployer: m.employer, schemeBranch: m.branch,
+    }))
+    return [...aebHits, ...schemeHits].slice(0, 10)
+  }, [searchQuery, members, employerId, schemeMembers, selEmpName])
 
   // Extract info from uploaded files using Claude API
   async function extractFromDocuments(files) {
@@ -210,6 +275,9 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
 
   function selectMember(m) {
     setFoundMember(m)
+    // Scheme member carries employer + branch — auto-fill claim tracking fields
+    if (m.schemeEmployer && !selEmpName) setSelEmpName(m.schemeEmployer)
+    if (m.schemeBranch) setSelBranch(m.schemeBranch)
     setStep('details')
   }
 
@@ -229,12 +297,14 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
       priority:       'High',
       memberName:     foundMember ? `${foundMember.memberName} ${foundMember.surname||''}`.trim() : claimData.claimantName,
       memberId:       foundMember?.idNumber || claimData.deceasedId,
-      description:    `Funeral claim — ${selectedType?.label}. Deceased: ${claimData.deceasedName}. Date of Death: ${claimData.dateOfDeath}.`,
+      description:    `Funeral claim — ${selectedType?.label}. Employer: ${selEmpName}${selBranch?` (${selBranch})`:''}. Deceased: ${claimData.deceasedName}. Date of Death: ${claimData.dateOfDeath}.`,
       assignedTo:     adviser?.id || '',
       slaDate:        new Date(Date.now() + 5*86400000).toISOString().split('T')[0],
       slaDays:        5,
       billingTrigger: false,
       extraFields: {
+        participating_employer: selEmpName,
+        branch:            selBranch || '',
         natural_unnatural: claimData.causeOfDeath || '',
         date_of_death:     claimData.dateOfDeath,
         relationship:      claimData.relationship,
@@ -318,13 +388,64 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
       {/* ── STEP 1: SELECT ── */}
       {step==='select' && (
         <div style={{ maxWidth:640, margin:'0 auto', width:'100%' }}>
-          <Card title="Select Employer" color={T.blue}>
-            <Field label="Employer" required>
-              <select value={employerId} onChange={e=>setEmployerId(e.target.value)} style={selectSt}>
-                <option value="">Select employer...</option>
-                {employers.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+          <Card title="Participating Employer" color={T.blue}
+            badge={isBilling && (
+              <button onClick={()=>setShowImport(s=>!s)}
+                style={{ fontSize:11, fontWeight:700, color:T.blue, background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, padding:'4px 10px', cursor:'pointer', fontFamily:'inherit' }}>
+                {showImport?'Close import':'Import list'}
+              </button>
+            )}>
+
+            {/* Import panel — paste employer[,branch[,region]] per line */}
+            {showImport && (
+              <div style={{ background:'#f9fafb', border:`1px dashed ${T.border}`, borderRadius:10, padding:'12px 14px', marginBottom:14 }}>
+                <div style={{ fontSize:12, color:T.gray, marginBottom:8, lineHeight:1.5 }}>
+                  Paste the participating employer list — one per line: <strong>Employer, Branch, Region</strong> (branch and region optional). Copy straight from Excel.
+                </div>
+                <textarea value={importText} onChange={e=>setImportText(e.target.value)}
+                  style={{ ...inputSt, minHeight:120, resize:'vertical', fontFamily:'monospace', fontSize:12 }}
+                  placeholder={"Harmony Gold, Kusasalethu\nHarmony Gold, Doornkop\nSibanye Stillwater, Driefontein"}/>
+                <button onClick={importEmployerList}
+                  style={{ marginTop:8, padding:'8px 18px', background:T.blue, border:'none', borderRadius:8, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                  Import {importText.split('\n').filter(l=>l.trim()).length} rows
+                </button>
+              </div>
+            )}
+
+            {schemeEmployers.length === 0 && !showImport && (
+              <div style={{ fontSize:12, color:T.gray, background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, padding:'9px 12px', marginBottom:12 }}>
+                No participating employers loaded yet{isBilling?' — use Import list above to load the scheme employer and branch list.':'.'}
+              </div>
+            )}
+
+            <Field label="Funeral Employer Group" required>
+              <select value={selEmpName} onChange={e=>{ setSelEmpName(e.target.value); setSelBranch('') }} style={selectSt}>
+                <option value="">Select employer... ({[...new Set(schemeEmployers.map(r=>r.name))].length} funeral employers)</option>
+                {[...new Set(schemeEmployers.map(r=>r.name))].sort().map(n=>(
+                  <option key={n} value={n}>{n}</option>
+                ))}
               </select>
             </Field>
+
+            {selEmpName && (
+              <div style={{ marginTop:10, display:'grid', gridTemplateColumns: branchesForSelected.length>0 ? '1fr 1fr' : '1fr', gap:10 }}>
+                <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'9px 12px' }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:T.gray, textTransform:'uppercase', marginBottom:2 }}>Selected Employer</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#059669' }}>{selEmpName}</div>
+                  <div style={{ fontSize:10, color:T.gray, marginTop:2 }}>
+                    {employerId ? '✓ AEB benefit profile linked — cover details will load' : 'Funeral scheme cover applies'}
+                  </div>
+                </div>
+                {branchesForSelected.length>0 && (
+                  <Field label="Branch" required>
+                    <select value={selBranch} onChange={e=>setSelBranch(e.target.value)} style={selectSt}>
+                      <option value="">Select branch...</option>
+                      {branchesForSelected.map(b=><option key={b}>{b}</option>)}
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
           </Card>
 
           <Card title="Claim Type" color={T.navy}>
@@ -339,7 +460,11 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
             </div>
           </Card>
 
-          <button onClick={()=>{ if(!employerId||!claimType){alert('Please select employer and claim type');return} setStep('upload') }}
+          <button onClick={()=>{
+              if(!selEmpName||!claimType){alert('Please select the participating employer and claim type');return}
+              if(branchesForSelected.length>0&&!selBranch){alert('Please select the branch');return}
+              setStep('upload')
+            }}
             style={{ width:'100%', padding:'13px', background:T.orange, border:'none', borderRadius:10, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
             Next → Upload Documents
           </button>
@@ -557,7 +682,7 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', fontSize:12, color:'rgba(255,255,255,0.6)' }}>
               <span>{selectedType?.label}</span>
               <span>·</span>
-              <span>{employer?.name}</span>
+              <span>{selEmpName}{selBranch?` · ${selBranch}`:""}{employer?` · linked: ${employer.name}`:""}</span>
               {claimData.dateOfDeath && <><span>·</span><span>Date of Death: {claimData.dateOfDeath}</span></>}
             </div>
           </div>
@@ -688,7 +813,7 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
             {[
               ['Claim Reference',   claimRef],
               ['Claim Type',        selectedType?.label],
-              ['Employer',          employer?.name],
+              ['Employer', selEmpName + (selBranch?' · '+selBranch:'')],
               ['Deceased',          claimData.deceasedName],
               ['Allocated To',      allocatedTo?.name || 'Claims Queue'],
               ['SLA',               '5 business days'],
