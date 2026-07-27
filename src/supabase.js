@@ -297,3 +297,26 @@ export async function saveCase(c) {
     return false
   }
 }
+
+// ── FUNERAL SCHEME PARTICIPATING EMPLOYERS ────────────────────────────────────
+export async function fetchFuneralEmployers() {
+  try {
+    const { data, error } = await supabase
+      .from('funeral_employers')
+      .select('*')
+      .eq('status', 'active')
+      .order('name')
+    if (error) { console.error('[DB] fetchFuneralEmployers error:', error.message); return [] }
+    console.log('[DB] fetchFuneralEmployers OK:', data?.length, 'records')
+    return data || []
+  } catch(e) { console.error('[DB] fetchFuneralEmployers exception:', e.message); return [] }
+}
+
+export async function saveFuneralEmployers(rows) {
+  try {
+    const { error } = await supabase.from('funeral_employers').upsert(rows)
+    if (error) { console.error('[DB] saveFuneralEmployers error:', error.message); return false }
+    console.log('[DB] saveFuneralEmployers OK:', rows.length, 'rows')
+    return true
+  } catch(e) { console.error('[DB] saveFuneralEmployers exception:', e.message); return false }
+}
