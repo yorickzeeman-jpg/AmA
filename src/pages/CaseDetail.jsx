@@ -16,7 +16,9 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
   const assignedUser = users.find(u => u.id === c.assignedTo)
   const employer     = employers.find(e => e.id === c.employerId)
-  const workflow     = c.workflow || null
+  // Never show a case without a workflow: fall back to the case type's template
+  // so cases created before workflow attachment still display and can be worked.
+  const workflow     = c.workflow || initWorkflow(c.caseTypeName)
   const prog         = workflow ? workflowProgress(workflow) : null
   const curStep      = workflow ? currentStep(workflow) : null
 

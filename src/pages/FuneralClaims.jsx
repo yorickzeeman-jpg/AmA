@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
-import { T, genRef } from '../data.js'
+import { T, genRef, initWorkflow } from '../data.js'
 import { inputSt, selectSt } from '../ui.jsx'
 import { fetchFuneralEmployers, saveFuneralEmployers, fetchFuneralMembers, saveFuneralMembers } from '../supabase.js'
 
@@ -292,6 +292,7 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
       ref,
       employerId,
       caseTypeName:   claimType === 'main_member' ? 'Death - Funeral' : 'Death - Extended Funeral',
+      workflow:       initWorkflow(claimType === 'main_member' ? 'Death - Funeral' : 'Death - Extended Funeral'),
       workspace:      'employer',
       status:         'Open',
       priority:       'High',
