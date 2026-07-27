@@ -320,3 +320,29 @@ export async function saveFuneralEmployers(rows) {
     return true
   } catch(e) { console.error('[DB] saveFuneralEmployers exception:', e.message); return false }
 }
+
+// ── FUNERAL SCHEME MAIN MEMBERS (with branches) ──────────────────────────────
+export async function fetchFuneralMembers() {
+  try {
+    const { data, error } = await supabase
+      .from('funeral_members')
+      .select('*')
+      .eq('status', 'active')
+      .order('name')
+    if (error) { console.error('[DB] fetchFuneralMembers error:', error.message); return [] }
+    console.log('[DB] fetchFuneralMembers OK:', data?.length, 'records')
+    return data || []
+  } catch(e) { console.error('[DB] fetchFuneralMembers exception:', e.message); return [] }
+}
+
+export async function saveFuneralMembers(rows) {
+  try {
+    // chunk large imports
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await supabase.from('funeral_members').upsert(rows.slice(i, i+500))
+      if (error) { console.error('[DB] saveFuneralMembers error:', error.message); return false }
+    }
+    console.log('[DB] saveFuneralMembers OK:', rows.length, 'rows')
+    return true
+  } catch(e) { console.error('[DB] saveFuneralMembers exception:', e.message); return false }
+}

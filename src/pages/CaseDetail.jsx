@@ -179,6 +179,8 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                         funeral_cost:      'Funeral Cost',
                         claim_type:        'Claim Type',
                         uploaded_docs:     'Documents Checked',
+                        participating_employer: 'Participating Employer',
+                        branch:            'Branch',
                       }[key] || key
                       // Render primitives only — objects/arrays are stringified safely (React error #31 guard)
                       const display = Array.isArray(val)
