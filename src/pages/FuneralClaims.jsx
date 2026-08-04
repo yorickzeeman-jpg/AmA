@@ -144,7 +144,6 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
   // Load participating employers once
   useEffect(() => {
     fetchFuneralEmployers().then(setSchemeEmployers)
-    fetchFuneralMembers().then(setSchemeMembers)
   }, [])
 
   function importMemberList() {
@@ -206,11 +205,7 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
       m.membershipNo?.includes(q)
     )
     // Scheme main members (imported with branches) — normalized to the same shape
-    const schemeHits = schemeMembers.filter(m =>
-      (!selEmpName || !m.employer || m.employer === selEmpName) &&
-      (m.name?.toLowerCase().includes(q) || m.id_number?.includes(q) ||
-       m.member_number?.toLowerCase?.().includes(q) || m.payroll_number?.toLowerCase?.().includes(q))
-    ).map(m => ({
+    const schemeHits = schemeMembers.map(m => ({
       id: m.id, memberName: m.name, surname: '', idNumber: m.id_number,
       payrollNumber: m.payroll_number || '', membershipNo: m.member_number || '',
       benefitCategory: m.employer || '',
@@ -219,6 +214,25 @@ export default function FuneralClaims({ employers, members, benefitProfiles, use
     }))
     return [...aebHits, ...schemeHits].slice(0, 10)
   }, [searchQuery, members, employerId, schemeMembers, selEmpName])
+
+  // Server-side scheme member search (service-role endpoint — anon key has no
+  // access to the member table). Debounced 300ms.
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 3) { setSchemeMembers([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const resp = await fetch('/api/search-members', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ query: searchQuery, employer: selEmpName || null }),
+        })
+        if (resp.ok) {
+          const { members: hits } = await resp.json()
+          setSchemeMembers(hits || [])
+        }
+      } catch(e) { console.warn('[FuneralClaims] member search failed:', e.message) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQuery, selEmpName])
 
   // Extract info from uploaded files using Claude API
   async function extractFromDocuments(files) {
