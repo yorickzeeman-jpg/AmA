@@ -82,7 +82,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
         {/* Tabs */}
         <div style={{ borderBottom:`1px solid ${T.border}`, flexShrink:0, background:'#fff' }}>
-          <Tabs tabs={['Overview','Workflow','Documents','Notes','Audit']} active={tab} onChange={setTab}/>
+          <Tabs tabs={['Overview','Workflow','Leandre AI','Documents','Notes','Audit']} active={tab} onChange={setTab}/>
         </div>
 
         {/* Body */}
@@ -262,6 +262,9 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
           )}
 
           {/* ── DOCUMENTS ── */}
+          {tab === 'Leandre AI' && (
+            <LeandrePanel c={c} users={users} currentUser={currentUser} onGoWorkflow={()=>setTab('Workflow')} onGoDocs={()=>setTab('Documents')}/>
+          )}
           {tab === 'Documents' && (
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:12 }}>
@@ -393,10 +396,14 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
   }
 
   function completeStep(s) {
+    // Leandre AI validation gate: progression is blocked until required
+    // documents are attached — the user is told exactly what is missing.
     if (s.requiredDocs?.length > 0) {
       const attached = c.documents?.length || 0
       if (attached < s.requiredDocs.length) {
-        if (!window.confirm(`Required documents may be missing:\n${s.requiredDocs.join(', ')}\n\nComplete anyway?`)) return
+        const missing = s.requiredDocs.slice(attached)
+        alert(`Leandre AI — step blocked.\n\nRequired before "${s.name}" can be completed:\n\n${missing.map(d=>`✗ ${d}`).join('\n')}\n\nUpload the outstanding document${missing.length!==1?'s':''} on the Documents tab, then complete this step.`)
+        return
       }
     }
     updateStep(s.id, {
@@ -598,6 +605,98 @@ function GenerateWorkflow({ c, currentUser, onUpdate }) {
         style={{ padding:'10px 24px', background:T.orange, border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
         Generate Default Workflow
       </button>
+    </div>
+  )
+}
+
+// ─── LEANDRE AI PANEL — per-case operations view ─────────────────────────────
+function LeandrePanel({ c, users, currentUser, onGoWorkflow, onGoDocs }) {
+  const wf     = c.workflow || initWorkflow(c.caseTypeName)
+  const steps  = wf?.steps || []
+  const done   = steps.filter(s=>s.status==='Completed'||s.status==='Skipped')
+  const cur    = steps.find(s=>s.status!=='Completed'&&s.status!=='Skipped')
+  const pct    = steps.length ? Math.round((done.length/steps.length)*100) : 0
+
+  // SLA position
+  const today    = new Date(); today.setHours(0,0,0,0)
+  const slaDate  = c.slaDate ? new Date(c.slaDate) : null
+  const daysLeft = slaDate ? Math.ceil((slaDate - today)/86400000) : null
+  const overdue  = daysLeft !== null && daysLeft < 0
+
+  // Missing documents for the current step
+  const attached    = c.documents?.length || 0
+  const missingDocs = cur?.requiredDocs?.slice(attached) || []
+
+  // Risk level
+  const risk = overdue ? 'High' : (daysLeft !== null && daysLeft <= 1) ? 'Medium' : missingDocs.length > 0 ? 'Medium' : 'Low'
+  const riskClr = { High:'#dc2626', Medium:'#d97706', Low:'#059669' }[risk]
+
+  // Suggested next action
+  const suggestion = !cur
+    ? 'All workflow steps complete — close the case.'
+    : missingDocs.length > 0
+    ? `Request the outstanding document${missingDocs.length!==1?'s':''}: ${missingDocs.join(', ')}.`
+    : overdue
+    ? `"${cur.name}" is past SLA — complete it today or escalate to a supervisor.`
+    : `Proceed with "${cur.name}"${cur.slaDays?` (${cur.slaDays} day SLA)`:''}.`
+
+  const assignee = users.find(u=>u.id===c.assignedTo)
+
+  const tiles = [
+    ['Current Stage',   cur ? cur.name : 'Complete',                        T.navy],
+    ['Progress',        `${pct}% · ${done.length}/${steps.length} steps`,   T.blue],
+    ['SLA',             slaDate ? (overdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft===0 ? 'Due today' : `${daysLeft}d remaining`) : '—', overdue ? '#dc2626' : daysLeft<=1 ? '#d97706' : '#059669'],
+    ['Risk Level',      risk,                                               riskClr],
+    ['Assigned To',     assignee?.name || '—',                              T.text],
+    ['Escalation',      c.escalated ? 'Escalated' : 'Normal',               c.escalated ? '#dc2626' : T.gray],
+  ]
+
+  return (
+    <div>
+      <div style={{ background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:12, padding:'14px 18px', marginBottom:14, color:'#fff' }}>
+        <div style={{ fontSize:11, opacity:0.55, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:3 }}>Leandre AI · Operations Manager</div>
+        <div style={{ fontSize:14, fontWeight:700, lineHeight:1.5 }}>{suggestion}</div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:8, marginBottom:14 }}>
+        {tiles.map(([l,v,clr])=>(
+          <div key={l} style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:10, padding:'11px 13px' }}>
+            <div style={{ fontSize:9, fontWeight:700, color:T.gray, textTransform:'uppercase', marginBottom:3 }}>{l}</div>
+            <div style={{ fontSize:13, fontWeight:800, color:clr }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {missingDocs.length > 0 && (
+        <div style={{ background:'#fff1f2', border:'1px solid #fecaca', borderRadius:10, padding:'12px 16px', marginBottom:14 }}>
+          <div style={{ fontSize:12, fontWeight:800, color:'#dc2626', marginBottom:8 }}>Outstanding Documents</div>
+          {missingDocs.map(d=>(
+            <div key={d} style={{ fontSize:13, color:'#be123c', padding:'3px 0' }}>❌ {d}</div>
+          ))}
+          <button onClick={onGoDocs} style={{ marginTop:8, padding:'7px 14px', background:'#dc2626', border:'none', borderRadius:7, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            Upload Documents →
+          </button>
+        </div>
+      )}
+
+      {/* Visual workflow progress */}
+      <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:12, padding:'14px 18px' }}>
+        <div style={{ fontSize:11, fontWeight:700, color:T.gray, textTransform:'uppercase', marginBottom:10 }}>Workflow Progress</div>
+        {steps.map(s=>{
+          const isDone = s.status==='Completed'||s.status==='Skipped'
+          const isCur  = s===cur
+          return (
+            <div key={s.id} style={{ display:'flex', gap:10, alignItems:'center', padding:'5px 0', fontSize:13 }}>
+              <span style={{ width:20, textAlign:'center' }}>{isDone ? '✓' : isCur ? '⏳' : '⬜'}</span>
+              <span style={{ color:isDone?'#059669':isCur?T.navy:T.gray, fontWeight:isCur?800:isDone?600:400, flex:1 }}>{s.name}</span>
+              {s.slaDays && <span style={{ fontSize:10, color:T.gray }}>{s.slaDays}d</span>}
+            </div>
+          )
+        })}
+        <button onClick={onGoWorkflow} style={{ marginTop:10, padding:'7px 16px', background:T.orange, border:'none', borderRadius:7, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+          Work the Steps →
+        </button>
+      </div>
     </div>
   )
 }

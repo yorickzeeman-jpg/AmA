@@ -247,6 +247,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
 
     const audit = [
       { time:now, user:currentUser.id, action:`Case ${caseRef} created — ${selectedType}`, type:'create' },
+      { time:now, user:'system', action:`Leandre AI: workflow attached (${wf?.steps?.length||0} steps)${assignedUser?`, allocated to ${assignedUser.name} (round robin)`:''}, SLA ${template?.slaDays||5} days`, type:'workflow' },
       ...(assignedTo?[{ time:now, user:'system', action:`Auto-assigned to ${assignedUser?.name}`, type:'assign' }]:[]),
       { time:now, user:'system', action:`Workflow started: ${selectedType}`, type:'workflow' },
       ...documents.map(d=>({ time:now, user:currentUser.id, action:`Document uploaded: ${d.name}`, type:'upload' })),
