@@ -65,6 +65,8 @@ export const INITIAL_USERS = [
     allocation:{ directTypes:[], pool:'general', excludeTypes:['ct_underwriting'] } },
   { id:'a0000000-0000-0000-0000-000000000008', name:'Ithasia',              email:'ithasia@amadwala.co.za',   role:'billing_admin',   status:'active', employer:null, avatar:'IT', joined:'2023-06-01',
     allocation:{ directTypes:[], pool:'billing', excludeTypes:[] } },
+  { id:'a0000000-0000-0000-0000-000000000009', name:'Cynthia Mabena',       email:'cynthia@amadwala.co.za',   role:'administrator',   status:'active', employer:null, avatar:'CY', joined:'2024-01-01',
+    allocation:{ directTypes:[], pool:'general', excludeTypes:[] } },
 ]
 
 // ─── ALLOCATION POOLS ─────────────────────────────────────────────────────────

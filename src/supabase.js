@@ -27,6 +27,7 @@ const LOCAL_USERS = [
   { id:'a0000000-0000-0000-0000-000000000006', name:'Daleen',    password:'Yorick2017', role:'billing_admin',   avatar:'DT', status:'active' },
   { id:'a0000000-0000-0000-0000-000000000007', name:'Mahlatse',  password:'Yorick2017', role:'administrator',   avatar:'MM', status:'active' },
   { id:'a0000000-0000-0000-0000-000000000008', name:'Ithasia',   password:'Yorick2017', role:'billing_admin',   avatar:'IT', status:'active' },
+  { id:'a0000000-0000-0000-0000-000000000009', name:'Cynthia',   password:'Yorick2017', role:'administrator',   avatar:'CY', status:'active' },
 ]
 
 export async function signInWithName(name, password) {
