@@ -504,6 +504,34 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                     </div>
                   )}
 
+                  {/* Allocation control — rendered on any "Allocate" step */}
+                  {canEdit && /allocat/i.test(s.name) && (
+                    <div style={{ marginBottom:12, background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:9, padding:'11px 14px' }}>
+                      <label style={{ fontSize:11, fontWeight:700, color:T.navy, display:'block', marginBottom:6 }}>Allocate this case to</label>
+                      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                        <select
+                          value={c.assignedTo || ''}
+                          onChange={e => {
+                            const newId   = e.target.value
+                            const newUser = users.find(u => u.id === newId)
+                            const audit   = [...(c.audit||[]), {
+                              time: new Date().toISOString(), user: currentUser.id,
+                              action: `Case reallocated to ${newUser?.name || 'Unassigned'} at step "${s.name}"`, type: 'assign',
+                            }]
+                            const ownerHistory = [...(c.ownerHistory||[]), ...(newId ? [{ user:newId, from:new Date().toISOString().split('T')[0] }] : [])]
+                            onUpdate({ ...c, assignedTo: newId, audit, ownerHistory })
+                          }}
+                          style={{ ...inputSt, maxWidth:260 }}>
+                          <option value="">Unassigned</option>
+                          {users.filter(u => !['employer_admin','employer_user'].includes(u.role) && u.status==='active').map(u => (
+                            <option key={u.id} value={u.id}>{u.name} ({u.role?.replace(/_/g,' ')})</option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize:11, color:T.gray }}>Reallocates immediately and writes to the audit trail.</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Notes */}
                   {canEdit && (
                     <div style={{ marginBottom:10 }}>

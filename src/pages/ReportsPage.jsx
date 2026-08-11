@@ -51,6 +51,19 @@ export default function ReportsPage({ cases, caseTypes, categories, employers, u
   const maxCat = Math.max(...byCat.map(c => c.count), 1)
   const maxEmp = Math.max(...byEmployer.map(e => e.total), 1)
 
+  // Funeral claims by participating employer (Impala / Sibanye / AMCU branches etc.)
+  const funeralByEmployer = Object.entries(
+    cases.filter(c => c.extraFields?.participating_employer).reduce((acc, c) => {
+      const key = c.extraFields.participating_employer
+      acc[key] = acc[key] || { total:0, open:0, completed:0 }
+      acc[key].total++
+      if (['Completed','Closed'].includes(c.status)) acc[key].completed++
+      else acc[key].open++
+      return acc
+    }, {})
+  ).map(([name, v]) => ({ name, ...v })).sort((a,b) => b.total - a.total)
+  const maxFuneral = Math.max(...funeralByEmployer.map(e => e.total), 1)
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20, animation:'fadeIn .3s ease' }}>
       <h1 style={{ fontSize:20, fontWeight:800, color:T.text, margin:0 }}>Operational Reports</h1>
@@ -124,6 +137,27 @@ export default function ReportsPage({ cases, caseTypes, categories, employers, u
           <CardHead title="Volume by Employer" />
           <div style={{ padding:'14px 18px' }}>
             {byEmployer.map(emp => <BarRow key={emp.id} label={emp.name} value={emp.total} max={maxEmp} color={T.blue} />)}
+          </div>
+        </Card>
+
+        {/* Funeral Claims by Participating Employer */}
+        <Card>
+          <CardHead title="Funeral Claims by Participating Employer" />
+          <div style={{ padding:'14px 18px' }}>
+            {funeralByEmployer.length === 0 ? (
+              <div style={{ fontSize:12, color:T.gray, textAlign:'center', padding:'12px 0' }}>No funeral claims registered yet.</div>
+            ) : (
+              <>
+                {funeralByEmployer.map(emp => (
+                  <div key={emp.name} style={{ marginBottom:4 }}>
+                    <BarRow label={emp.name} value={emp.total} max={maxFuneral} color={T.navy} />
+                    <div style={{ fontSize:10, color:T.gray, margin:'-4px 0 6px 2px' }}>
+                      {emp.open} open · {emp.completed} completed
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </Card>
 
