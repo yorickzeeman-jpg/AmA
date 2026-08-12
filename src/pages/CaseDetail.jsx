@@ -95,7 +95,6 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
                 {[
                   ['Employer',    employer?.name || '—'],
-                  ['Assigned To', assignedUser?.name || 'Unassigned'],
                   ['SLA Due',     c.slaDate],
                   ['Created',     c.created],
                   ['Member',      c.memberName || '—'],
@@ -106,6 +105,36 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                     <div style={{ fontSize:13, fontWeight:500, color:T.text }}>{v}</div>
                   </div>
                 ))}
+                {/* Assigned To — with reassignment for managers/administrators */}
+                <div>
+                  <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>Assigned To</div>
+                  {['general_manager','administrator'].includes(currentUser.role) ? (
+                    <select
+                      value={c.assignedTo || ''}
+                      onChange={e => {
+                        const newId   = e.target.value
+                        const newUser = users.find(u => u.id === newId)
+                        const prev    = users.find(u => u.id === c.assignedTo)
+                        if (!window.confirm(`Reassign ${c.ref} from ${prev?.name || 'Unassigned'} to ${newUser?.name || 'Unassigned'}?`)) return
+                        const audit = [...(c.audit||[]), {
+                          time:   new Date().toISOString(),
+                          user:   currentUser.id,
+                          action: `Case reassigned: ${prev?.name || 'Unassigned'} → ${newUser?.name || 'Unassigned'} (by ${currentUser.name})`,
+                          type:   'assign',
+                        }]
+                        const ownerHistory = [...(c.ownerHistory||[]), ...(newId ? [{ user:newId, from:new Date().toISOString().split('T')[0] }] : [])]
+                        onUpdate({ ...c, assignedTo: newId, audit, ownerHistory })
+                      }}
+                      style={{ ...inputSt, padding:'6px 10px', fontSize:13, fontWeight:600 }}>
+                      <option value="">Unassigned</option>
+                      {users.filter(u => !['employer_admin','employer_user'].includes(u.role) && u.status==='active').map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize:13, fontWeight:500, color:T.text }}>{assignedUser?.name || 'Unassigned'}</div>
+                  )}
+                </div>
               </div>
 
               {/* Workflow progress summary */}
