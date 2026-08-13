@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import {
-  T, genRef, calcSlaDate, allocateCase, addBusinessDays,
+  T, genRef, calcSlaDate, allocateCase, addBusinessDays, slaStatus,
   WORKFLOW_TEMPLATES, WORKFLOW_CATEGORIES, CASE_TYPES_BY_CATEGORY,
   CASE_STATUSES, PRIORITIES, STEP_STATUS_CONFIG,
   initWorkflow, workflowProgress, currentStep,
@@ -90,10 +90,10 @@ function UploadZone({ files, onAdd, onRemove }) {
 export default function CasesPage({ cases, caseTypes, categories, employers, users, currentUser, onOpenCase, onAddCase, onAddBillingTask, initialFilter, workspace='employer' }) {
   const isEmployer = ['employer_admin','employer_user'].includes(currentUser.role)
   const [search, setSearch]   = useState('')
-  const [f, setF]             = useState({ status:'', priority:'', category:'', employer:'', ...initialFilter })
+  const [f, setF]             = useState({ status:'', priority:'', category:'', employer:'', assignee:'', overdue:false, ...initialFilter })
   const [showNew, setShowNew] = useState(false)
   const setFF = (k,v) => setF(x=>({...x,[k]:v}))
-  const hasFilter = Object.values(f).some(Boolean)
+  const hasFilter = f.status||f.priority||f.category||f.employer||f.assignee||f.overdue
 
   const visible = cases.filter(c => {
     if (c.workspace !== workspace) return false
@@ -107,6 +107,8 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
     if (f.priority && c.priority!==f.priority) return false
     if (f.category && c.workflowCategory!==f.category) return false
     if (f.employer && c.employerId!==f.employer) return false
+    if (f.assignee && c.assignedTo!==f.assignee) return false
+    if (f.overdue  && !(slaStatus(c.slaDate, c.status)==='overdue')) return false
     return true
   })
 
@@ -137,7 +139,9 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
             {opts.map(o=>Array.isArray(o)?<option key={o[0]} value={o[0]}>{o[1]}</option>:<option key={o}>{o}</option>)}
           </select>
         ))}
-        {hasFilter && <button onClick={()=>setF({status:'',priority:'',category:'',employer:''})} style={{ fontSize:11, color:T.red, background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>Clear</button>}
+        {hasFilter && <button onClick={()=>setF({status:'',priority:'',category:'',employer:'',assignee:'',overdue:false})} style={{ fontSize:11, color:T.red, background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>Clear</button>}
+        {f.overdue && <span style={{ fontSize:11, fontWeight:700, color:T.red, background:'#fff1f2', border:'1px solid #fecaca', borderRadius:14, padding:'3px 10px' }}>⚠ Overdue only</span>}
+        {f.assignee && <span style={{ fontSize:11, fontWeight:700, color:T.blue, background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:14, padding:'3px 10px' }}>👤 {users.find(u=>u.id===f.assignee)?.name || 'Assignee'}</span>}
         <div style={{ marginLeft:'auto', fontSize:11, color:T.gray }}>{visible.length} case{visible.length!==1?'s':''}</div>
       </div>
 

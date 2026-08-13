@@ -67,19 +67,40 @@ export const INITIAL_USERS = [
     allocation:{ directTypes:[], pool:'billing', excludeTypes:[] } },
   { id:'a0000000-0000-0000-0000-000000000009', name:'Cynthia Mabena',       email:'cynthia@amadwala.co.za',   role:'administrator',   status:'active', employer:null, avatar:'CY', joined:'2024-01-01',
     allocation:{ directTypes:[], pool:'general', excludeTypes:[] } },
+  { id:'a0000000-0000-0000-0000-000000000010', name:'Sarah Humeleng',       email:'sarah@amadwala.co.za',     role:'financial_adviser', status:'active', employer:null, avatar:'SH', joined:'2024-01-01',
+    allocation:{ directTypes:[], pool:'advisers', excludeTypes:[] } },
+  { id:'a0000000-0000-0000-0000-000000000011', name:'Seloatswe Owen',       email:'owen@amadwala.co.za',      role:'financial_adviser', status:'active', employer:null, avatar:'SO', joined:'2024-01-01',
+    allocation:{ directTypes:[], pool:'advisers', excludeTypes:[] } },
 ]
 
 // ─── ALLOCATION POOLS ─────────────────────────────────────────────────────────
 export const ALLOCATION_POOLS = {
   general: {
     name: 'General Administration Pool',
-    members: ['u2','u3','u6'],   // Nokulunga, Tevin, Mahlatse
+    members: [
+      'a0000000-0000-0000-0000-000000000003',  // Nokulunga
+      'a0000000-0000-0000-0000-000000000004',  // Tevin
+      'a0000000-0000-0000-0000-000000000007',  // Mahlatse
+      'a0000000-0000-0000-0000-000000000009',  // Cynthia
+    ],
     strategy: 'round_robin',
     currentIndex: 0,
   },
   billing: {
     name: 'Billing Pool',
-    members: ['u5','u7'],        // Daleen, Ithasia
+    members: [
+      'a0000000-0000-0000-0000-000000000006',  // Daleen
+      'a0000000-0000-0000-0000-000000000008',  // Ithasia
+    ],
+    strategy: 'round_robin',
+    currentIndex: 0,
+  },
+  advisers: {
+    name: 'Financial Advisers Pool',
+    members: [
+      'a0000000-0000-0000-0000-000000000010',  // Sarah Humeleng
+      'a0000000-0000-0000-0000-000000000011',  // Seloatswe Owen
+    ],
     strategy: 'round_robin',
     currentIndex: 0,
   },
@@ -108,9 +129,9 @@ export const INITIAL_CASE_TYPES = [
   {
     id:'ct_new_employee', categoryId:'cat1', name:'New Employee',
     slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
-    escalationDays:1, responsibleTeam:'General Administration Pool',
+    escalationDays:1, responsibleTeam:'Financial Advisers Pool',
     isBillingTrigger:true, isInternal:false,
-    directAssignTo:null, pool:'general',
+    directAssignTo:null, pool:'advisers',
     requiredDocs:['ID Copy','Employment Contract','Enrolment Form','Beneficiary Form'],
     stages:[
       { id:'s1', name:'Request Received',   owner:'administrator', notify:true,  requiredDocs:['Enrolment Form'] },

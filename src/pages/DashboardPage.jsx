@@ -39,10 +39,13 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
     open: cases.filter(c => c.assignedTo === u.id && !['Completed','Closed','Billing Complete'].includes(c.status)).length,
   }))
 
-  // Category breakdown
+  // Category breakdown — match by caseTypeId OR caseTypeName, because cases
+  // created via claim registration / Supabase reload carry only the name
   const catBreakdown = categories.filter(c => c.id !== 'cat7').map(cat => {
-    const typeIds = caseTypes.filter(ct => ct.categoryId === cat.id).map(ct => ct.id)
-    return { ...cat, count: empCases.filter(c => typeIds.includes(c.caseTypeId)).length }
+    const typesInCat = caseTypes.filter(ct => ct.categoryId === cat.id)
+    const ids   = typesInCat.map(ct => ct.id)
+    const names = typesInCat.map(ct => ct.name)
+    return { ...cat, count: empCases.filter(c => ids.includes(c.caseTypeId) || names.includes(c.caseTypeName)).length }
   }).filter(c => c.count > 0)
 
   const pendingBillingCount = myBilling.filter(bt=>!['Billing Complete'].includes(bt.status)).length
@@ -125,9 +128,9 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
 
       {/* KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:14 }}>
-        <KPI label="Open Cases"     value={open.length}      icon="cases"   color={T.blue}  trend={3} />
-        <KPI label="Overdue"        value={overdue.length}   icon="warning" color={T.red}   />
-        <KPI label="Escalated"      value={escalated.length} icon="bell"    color="#be123c" />
+        <KPI label="Open Cases"     value={open.length}      icon="cases"   color={T.blue}  trend={3} onClick={()=>onNav('cases')} />
+        <KPI label="Overdue"        value={overdue.length}   icon="warning" color={T.red}   onClick={()=>onNav('cases',{overdue:true})} />
+        <KPI label="Escalated"      value={escalated.length} icon="bell"    color="#be123c" onClick={()=>onNav('cases',{status:'Escalated'})} />
         <KPI label="Completed"      value={closed.length}    icon="check"   color={T.green} sub="All time"/>
         {(isGM || isBilling) && <KPI label="Billing Queue" value={myBilling.filter(bt=>!['Billing Complete'].includes(bt.status)).length} icon="sla" color={T.purple} />}
         {isGM && <KPI label="Internal Cases" value={intCases.filter(c=>!['Completed','Closed'].includes(c.status)).length} icon="audit" color={T.gray} />}
@@ -140,7 +143,7 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
           <CardHead title={isAdmin ? 'My Assigned Cases' : isEmployer ? 'Recent Cases' : 'Open Cases'}
             action={<button onClick={()=>onNav('cases')} style={{ fontSize:12, color:T.orange, fontWeight:600, background:'none', border:'none', cursor:'pointer' }}>View all →</button>} />
           {open.slice(0,6).map(c => {
-            const ct  = caseTypes.find(x => x.id===c.caseTypeId)
+            const ct  = caseTypes.find(x => x.id===c.caseTypeId) || caseTypes.find(x => x.name===c.caseTypeName)
             const emp = employers.find(x => x.id===c.employerId)
             return (
               <div key={c.id} onClick={()=>onOpenCase(c)}
@@ -185,7 +188,10 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
             <CardHead title="Team Workload"/>
             <div style={{ padding:'12px 16px' }}>
               {staffWorkload.map(u => (
-                <div key={u.id} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <div key={u.id} onClick={()=>onNav('cases',{assignee:u.id})}
+                  style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12, cursor:'pointer', borderRadius:8, padding:'4px 6px', margin:'0 -6px 8px' }}
+                  onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <div style={{ width:30, height:30, borderRadius:'50%', background:u.role==='billing_admin'?T.purple:T.blue, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, flexShrink:0 }}>{u.avatar}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:600, color:T.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.name}</div>
@@ -205,7 +211,7 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
           <Card>
             <CardHead title={`Escalation Queue (${escalated.length})`}/>
             {escalated.map(c => {
-              const ct  = caseTypes.find(x=>x.id===c.caseTypeId)
+              const ct  = caseTypes.find(x=>x.id===c.caseTypeId) || caseTypes.find(x=>x.name===c.caseTypeName)
               const emp = employers.find(x=>x.id===c.employerId)
               return (
                 <div key={c.id} onClick={()=>onOpenCase(c)}
