@@ -34,7 +34,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
   }
 
   function changeStatus(newStatus) {
-    onUpdate({ ...c, status: newStatus, audit: addAudit(`Status changed to ${newStatus}`, 'status') })
+    const resolvedDate = newStatus === 'Closed'
+      ? (c.resolvedDate || new Date().toISOString().split('T')[0])
+      : (c.resolvedDate || null)
+    onUpdate({ ...c, status: newStatus, resolvedDate, audit: addAudit(`Status changed to ${newStatus}`, 'status') })
   }
 
   function sendToBilling() {

@@ -264,6 +264,7 @@ export async function saveCase(c) {
     description:    c.description,
     assigned_to:    c.assignedTo,
     sla_date:       c.slaDate,
+    resolved_date:  c.resolvedDate || null,
     sla_days:       c.slaDays,
     billing_trigger:c.billingTrigger || false,
     billing_task_id:c.billingTaskId || null,

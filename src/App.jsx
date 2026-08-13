@@ -40,6 +40,7 @@ function normCase(row) {
     description:    row.description,
     assignedTo:     row.assigned_to,
     slaDate:        row.sla_date,
+    resolvedDate:   row.resolved_date || null,
     slaDays:        row.sla_days,
     billingTrigger: row.billing_trigger,
     billingTaskId:  row.billing_task_id,
