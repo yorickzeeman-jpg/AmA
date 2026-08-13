@@ -32,7 +32,8 @@ function normCase(row) {
     caseTypeName:   row.case_type_name,
     caseTypeId:     row.case_type_id,
     workspace:      row.workspace || 'employer',
-    status:         row.status,
+    // 'Completed' retired — normalise legacy rows so reports/pivots see one terminal status
+    status:         row.status === 'Completed' ? 'Closed' : row.status,
     priority:       row.priority,
     memberName:     row.member_name,
     memberId:       row.member_id,

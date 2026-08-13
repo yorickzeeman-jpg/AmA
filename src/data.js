@@ -538,7 +538,7 @@ export const STATUS_CFG = {
   'Sent to Billing':      { bg:'#fdf4ff', color:'#7e22ce', dot:'#a855f7'  },
   'Escalated':            { bg:'#fff1f2', color:'#be123c', dot:'#f43f5e'  },
   'Completed':            { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
-  'Closed':               { bg:'#f9fafb', color:'#374151', dot:'#9ca3af'  },
+  'Closed':               { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
   // Billing statuses
   'Billing In Progress':  { bg:'#fdf4ff', color:'#7e22ce', dot:'#a855f7'  },
   'Awaiting Information (Billing)':{ bg:'#fffbeb', color:'#b45309', dot:'#f59e0b' },
@@ -546,7 +546,8 @@ export const STATUS_CFG = {
   'Billing Exception':    { bg:'#fff1f2', color:'#be123c', dot:'#f43f5e'  },
   'Billing Complete':     { bg:'#f0fdf4', color:'#065f46', dot:'#059669'  },
 }
-export const CASE_STATUSES = ['Submitted','Received','In Progress','Awaiting Information','Escalated','Completed','Closed']
+// 'Completed' retired — Closed is the single terminal status (legacy values normalised on load)
+export const CASE_STATUSES = ['Submitted','Received','In Progress','Awaiting Information','Escalated','Closed']
 
 export const PRIORITY_CFG = {
   Low:      { bg:'#f0fdf4', color:'#15803d' },

@@ -43,7 +43,7 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
     URL.revokeObjectURL(url)
   }
   const total     = cases.length
-  const completed = cases.filter(c => c.status==='Completed').length
+  const completed = cases.filter(c => c.status==='Closed').length
   const overdue   = cases.filter(c => slaStatus(c.slaDate,c.status)==='overdue').length
   const withinSla = cases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) }).length
   const slaPct    = total ? Math.round((withinSla/total)*100) : 100
@@ -59,7 +59,7 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
   const byCaseType = caseTypes.map(ct => {
     const ctCases     = cases.filter(c => c.caseTypeId===ct.id || c.caseTypeName===ct.name)
     const ctOpen      = ctCases.filter(c => !['Completed','Closed'].includes(c.status))
-    const ctCompleted = ctCases.filter(c => c.status==='Completed')
+    const ctCompleted = ctCases.filter(c => c.status==='Closed')
     const ctOverdue   = ctCases.filter(c => slaStatus(c.slaDate,c.status)==='overdue')
     const ctWithinSla = ctCases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) })
     const cat         = categories.find(c => c.id===ct.categoryId)
@@ -77,14 +77,14 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
     ...emp,
     total:     cases.filter(c => c.employerId===emp.id).length,
     open:      cases.filter(c => c.employerId===emp.id && !['Completed','Closed'].includes(c.status)).length,
-    completed: cases.filter(c => c.employerId===emp.id && c.status==='Completed').length,
+    completed: cases.filter(c => c.employerId===emp.id && c.status==='Closed').length,
   })).sort((a,b) => b.total-a.total)
 
   const consultants  = users.filter(u => ['consultant','claims_admin','service_admin'].includes(u.role))
   const byConsultant = consultants.map(u => ({
     ...u,
     allocated: cases.filter(c => c.assignedTo===u.id).length,
-    completed: cases.filter(c => c.assignedTo===u.id && c.status==='Completed').length,
+    completed: cases.filter(c => c.assignedTo===u.id && c.status==='Closed').length,
     open:      cases.filter(c => c.assignedTo===u.id && !['Completed','Closed'].includes(c.status)).length,
     escalated: cases.filter(c => c.assignedTo===u.id && c.escalated).length,
   }))
