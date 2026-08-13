@@ -1,7 +1,47 @@
+import { useState } from 'react'
 import { T, slaStatus } from '../data.js'
 import { BarRow, Card, CardHead, KPI } from '../ui.jsx'
 
-export default function ReportsPage({ cases, caseTypes, categories, employers, users }) {
+const RANGES = [
+  { id:'week',  label:'This Week',  days:7   },
+  { id:'month', label:'This Month', days:31  },
+  { id:'all',   label:'All Time',   days:null },
+]
+
+export default function ReportsPage({ cases: allCases, caseTypes, categories, employers, users }) {
+  const [range, setRange] = useState('all')
+
+  // Date-range filter on case creation date
+  const cutoff = RANGES.find(r=>r.id===range)?.days
+  const cases  = cutoff
+    ? allCases.filter(c => c.created && (Date.now() - new Date(c.created)) <= cutoff*86400000)
+    : allCases
+
+  // ── CSV EXPORT — full admin dataset for the selected range ──────────────
+  function exportCSV() {
+    const esc = v => `"${String(v??'').replace(/"/g,'""')}"`
+    const rows = cases.map(c => {
+      const emp = employers.find(e=>e.id===c.employerId)
+      const usr = users.find(u=>u.id===c.assignedTo)
+      const sla = slaStatus(c.slaDate, c.status)
+      return [
+        c.ref, c.caseTypeName||'', c.workflowCategory||'', c.status||'', c.priority||'',
+        emp?.name||'', c.extraFields?.participating_employer||'', c.extraFields?.branch||'',
+        c.memberName||'', c.memberId||'', usr?.name||'Unassigned',
+        c.created||'', c.slaDate||'', sla==='overdue'?'OVERDUE':sla,
+        c.extraFields?.amount_paid||'',
+      ].map(esc).join(',')
+    })
+    const header = ['Ref','Case Type','Category','Status','Priority','Employer','Participating Employer','Branch','Member','Member ID','Assigned To','Created','SLA Date','SLA Status','Amount Paid'].map(esc).join(',')
+    const csv  = [header, ...rows].join('\r\n')
+    const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `AEB-Admin-Report-${range}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
   const total     = cases.length
   const completed = cases.filter(c => c.status==='Completed').length
   const overdue   = cases.filter(c => slaStatus(c.slaDate,c.status)==='overdue').length
@@ -10,13 +50,14 @@ export default function ReportsPage({ cases, caseTypes, categories, employers, u
 
   // Category summary (grouping only — no business logic)
   const byCat = categories.map(cat => {
-    const typeIds = caseTypes.filter(ct => ct.categoryId===cat.id).map(ct => ct.id)
-    return { ...cat, count:cases.filter(c => typeIds.includes(c.caseTypeId)).length }
+    const typesInCat = caseTypes.filter(ct => ct.categoryId===cat.id)
+    const ids = typesInCat.map(ct=>ct.id), names = typesInCat.map(ct=>ct.name)
+    return { ...cat, count:cases.filter(c => ids.includes(c.caseTypeId) || names.includes(c.caseTypeName)).length }
   })
 
   // Case Type detail — the primary reporting unit
   const byCaseType = caseTypes.map(ct => {
-    const ctCases     = cases.filter(c => c.caseTypeId===ct.id)
+    const ctCases     = cases.filter(c => c.caseTypeId===ct.id || c.caseTypeName===ct.name)
     const ctOpen      = ctCases.filter(c => !['Completed','Closed'].includes(c.status))
     const ctCompleted = ctCases.filter(c => c.status==='Completed')
     const ctOverdue   = ctCases.filter(c => slaStatus(c.slaDate,c.status)==='overdue')
@@ -66,7 +107,21 @@ export default function ReportsPage({ cases, caseTypes, categories, employers, u
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20, animation:'fadeIn .3s ease' }}>
-      <h1 style={{ fontSize:20, fontWeight:800, color:T.text, margin:0 }}>Operational Reports</h1>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+        <h1 style={{ fontSize:20, fontWeight:800, color:T.text, margin:0 }}>Operational Reports</h1>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          {RANGES.map(r => (
+            <button key={r.id} onClick={()=>setRange(r.id)}
+              style={{ padding:'7px 14px', borderRadius:8, border:`1.5px solid ${range===r.id?T.orange:T.border}`, background:range===r.id?T.orangeL:'#fff', color:range===r.id?T.orange:T.gray, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+              {r.label}
+            </button>
+          ))}
+          <button onClick={exportCSV}
+            style={{ padding:'8px 18px', borderRadius:8, border:'none', background:T.navy, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            ⬇ Download Report ({cases.length} cases)
+          </button>
+        </div>
+      </div>
 
       {/* Summary KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:14 }}>
