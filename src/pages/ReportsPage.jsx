@@ -31,8 +31,9 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
             : '')
       return [
         c.ref,
-        c.caseTypeName||'',                          // Case Type (e.g. Disability - Capital)
-        c.workflowCategory||'',                      // Category (e.g. Claims)
+        c.masterCaseType||'',                        // Case Type (Death, Disability, Query…)
+        c.caseCategory||c.caseTypeName||'',          // Case Category (Funeral, Capital Disability…)
+        c.workflowCategory||'',                      // Workflow group (Claims, Exits…)
         c.status||'', c.priority||'',
         emp?.name||'', c.extraFields?.participating_employer||'', c.extraFields?.branch||'',
         c.memberName||'', c.memberId||'', usr?.name||'Unassigned',
@@ -44,7 +45,7 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
         c.extraFields?.amount_paid||'',
       ].map(esc).join(',')
     })
-    const header = ['Ref','Case Type','Category','Status','Priority','Employer','Participating Employer','Branch','Member','Member ID','Assigned To','Created','SLA Date','Date Resolved','SLA Status','Date of Death','Cause of Death','Relationship','Deceased Name','Amount Paid'].map(esc).join(',')
+    const header = ['Ref','Case Type','Case Category','Workflow Group','Status','Priority','Employer','Participating Employer','Branch','Member','Member ID','Assigned To','Created','SLA Date','Date Resolved','SLA Status','Date of Death','Cause of Death','Relationship','Deceased Name','Amount Paid'].map(esc).join(',')
     const csv  = [header, ...rows].join('\r\n')
     const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8' })
     const url  = URL.createObjectURL(blob)

@@ -6,6 +6,7 @@ import {
   initWorkflow, workflowProgress, currentStep,
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Card, Btn, Modal, Field, inputSt, selectSt, Empty } from '../ui.jsx'
+import { CASE_CONFIG, CASE_TYPE_LIST, categoriesForType, findConfig, slaDueDate } from '../caseConfig.js'
 
 // ─── DOCUMENT UPLOAD ZONE (unchanged from v15) ────────────────────────────────
 const ACCEPTED_TYPES = {
@@ -223,6 +224,8 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
   const [step, setStep]           = useState(1)  // 1=category, 2=case type, 3=details
   const [selectedCategory, setCat] = useState('')
   const [selectedType, setType]    = useState('')   // template key
+  const [cfgType, setCfgType]      = useState('')   // master Case Type (Excel)
+  const [cfgCategory, setCfgCat]   = useState('')   // master Case Category (Excel)
   const [attachedFiles, setFiles]  = useState([])
   const [form, setForm] = useState({
     employerId: isEmployer ? currentUser.employer : '',
@@ -231,6 +234,9 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
   const template     = selectedType ? WORKFLOW_TEMPLATES[selectedType] : null
+  // Master configuration (source of truth: 1_CASE TYPES AND CATEGORIES.xlsx)
+  const masterCfg    = (cfgType && cfgCategory) ? findConfig(cfgType, cfgCategory) : null
+  const effSlaDays   = masterCfg ? masterCfg.slaDays : (template?.slaDays || 5)
   const categoryList = WORKFLOW_CATEGORIES
   const typesInCat   = selectedCategory ? (CASE_TYPES_BY_CATEGORY[selectedCategory] || []) : []
 
@@ -261,6 +267,9 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       id: crypto.randomUUID(), ref:caseRef, workspace,
       caseTypeName: selectedType,
       workflowCategory: template?.category || '',
+      masterCaseType: cfgType || null,
+      caseCategory:   cfgCategory || null,
+      slaNote:        masterCfg?.note || null,
       employerId: form.employerId,
       status:'Submitted', priority:form.priority,
       assignedTo, createdBy:currentUser.id,
@@ -268,8 +277,10 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       memberId:   form.memberId||null,
       currentStage:0, stageHistory:[],
       created:today,
-      slaDate: addBusinessDays(new Date().toISOString().split('T')[0], template?.slaDays || 5),
-      slaDays: template?.slaDays || 5,
+      slaDate: masterCfg
+        ? slaDueDate(new Date().toISOString().split('T')[0], masterCfg.slaDays)
+        : addBusinessDays(new Date().toISOString().split('T')[0], template?.slaDays || 5),
+      slaDays: effSlaDays,
       description: form.description,
       extraFields:  form.extraFields || {},
       billingTaskId:null,
@@ -362,6 +373,41 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       {step===3 && (
         <div>
           <button onClick={()=>setStep(2)} style={{ fontSize:12, color:T.orange, background:'none', border:'none', cursor:'pointer', fontWeight:600, marginBottom:14, fontFamily:'inherit' }}>← Back</button>
+
+          {/* Master Case Type / Category — SLA loads automatically from configuration */}
+          <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.gray, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:10 }}>Case Classification & SLA</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <Field label="Case Type">
+                <select value={cfgType} onChange={e=>{ setCfgType(e.target.value); setCfgCat('') }} style={selectSt}>
+                  <option value="">Select case type…</option>
+                  {CASE_TYPE_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </Field>
+              <Field label="Case Category">
+                <select value={cfgCategory} onChange={e=>setCfgCat(e.target.value)} style={selectSt} disabled={!cfgType}>
+                  <option value="">{cfgType ? 'Select category…' : 'Select case type first'}</option>
+                  {categoriesForType(cfgType).map(c => <option key={c.category} value={c.category}>{c.category}</option>)}
+                </select>
+              </Field>
+            </div>
+            {masterCfg && (
+              <div style={{ marginTop:12, display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+                <span style={{ fontSize:12, fontWeight:800, color:'#059669', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'6px 12px' }}>
+                  SLA: {masterCfg.slaDays} day{masterCfg.slaDays!==1?'s':''} · due {slaDueDate(new Date().toISOString().split('T')[0], masterCfg.slaDays)}
+                </span>
+                <span style={{ fontSize:11, fontWeight:700, borderRadius:8, padding:'6px 12px',
+                  color: masterCfg.workflow ? T.blue : '#c2410c',
+                  background: masterCfg.workflow ? '#eff6ff' : '#fff7ed',
+                  border: `1px solid ${masterCfg.workflow ? '#bfdbfe' : '#fed7aa'}` }}>
+                  {masterCfg.workflow ? `Workflow: ${masterCfg.workflow}` : '⚠ Workflow not configured'}
+                </span>
+                {masterCfg.note && (
+                  <div style={{ fontSize:11, color:T.gray, fontStyle:'italic', width:'100%' }}>Note: {masterCfg.note}</div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Workflow preview card */}
           {template && (
