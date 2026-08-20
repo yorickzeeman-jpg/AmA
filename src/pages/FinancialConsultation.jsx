@@ -19,6 +19,45 @@ import { inputSt, selectSt } from '../ui.jsx'
 //   7. Actions & Sign-off  — tasks created, consultation recorded
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ─── TAILORED PLANS: DISCOVERY ECOSYSTEM ─────────────────────────────────────
+// Engagement value available WITHOUT any additional retirement contribution.
+const ECOSYSTEM_SECTIONS = [
+  { id:'Vitality Health', title:'1 · Vitality Health', sub:'Health checks, tracking and rewards', clr:'#e8536f',
+    items:[
+      { name:'Health checks',          value:'Up to 2%',   detail:'BMI, cholesterol and blood pressure screening' },
+      { name:'Vitality Health Tracker', value:'Up to 3.5%', detail:'Through the Vitality Health Tracker, members can earn 3.5%' },
+      { name:'Active Rewards',         value:'Up to 2%',   detail:'Weekly physical activity goals' },
+      { name:'Health-related benefits', detail:'Screenings, wellness partners and preventative care benefits' },
+    ]},
+  { id:'Vitality Money', title:'2 · Vitality Money', sub:'Financial wellness and money rewards', clr:'#059669',
+    items:[
+      { name:'Financial wellness',     detail:'Understanding and improving the member\u2019s financial position' },
+      { name:'Money-related rewards',  detail:'Rewards and benefits linked to financial engagement' },
+    ]},
+  { id:'Vitality Active Rewards', title:'3 · Vitality Active Rewards', sub:'Value available through engagement', clr:'#d97706',
+    items:[
+      { name:'Weekly goals',           detail:'Personalised physical activity targets' },
+      { name:'Rewards for engagement', detail:'Demonstrates the value available simply by participating' },
+    ]},
+  { id:'Discovery Pay', title:'4 · Discovery Pay', sub:'Entry-level account with Vitality Money', clr:'#1e5fd9',
+    items:[
+      { name:'Vitality Travel',        detail:'10% discount on all bookings through the Vitality Travel platform' },
+      { name:'Pay by cellphone',       detail:'Pay other Discovery clients using just their cellphone number' },
+      { name:'Health & fitness partners', detail:'Access to Vitality\u2019s network of health and fitness partners with Pay' },
+      { name:'Medical bills',          detail:'Instantly settle medical bills, without hassle of paperwork' },
+      { name:'Umbrella Fund members',  detail:'All Umbrella Fund members will be given access to a free Discovery Pay account with Vitality Money' },
+    ]},
+  { id:'Discovery Ecosystem', title:'5 · Discovery Ecosystem', sub:'Health · Money · Rewards · Banking · Insurance · Retirement', clr:'#7c3aed',
+    items:[
+      { name:'Health',     detail:'Medical scheme, screenings and wellness' },
+      { name:'Money',      detail:'Vitality Money and financial wellness' },
+      { name:'Rewards',    detail:'Day-to-day rewards improving life every day' },
+      { name:'Banking',    detail:'Discovery Bank transactional and savings options' },
+      { name:'Insurance',  detail:'Life, health and short-term insurance options' },
+      { name:'Retirement', detail:'Umbrella Fund retirement savings and long-term value' },
+    ]},
+]
+
 const STEPS = [
   { id:'profile',      label:'Member Profile',     icon:'👤' },
   { id:'benefits',     label:'Employer Benefits',  icon:'🏢' },
@@ -237,7 +276,9 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
   // Discovery-style journey: income goal in Rands + selected contribution plan
   const [incomeGoal, setIncomeGoal]   = useState(null)   // null → derive from targetPct
   const [selectedPlan, setSelPlan]    = useState(null)
-  const [journeyPhase, setPhase]      = useState(1)      // 1 goal · 2 tracking · 3 plans
+  const [journeyPhase, setPhase]      = useState(1)      // 1 goal · 2 tracking · 3 tailored plans
+  const [ecoOpen, setEcoOpen]         = useState(null)
+  const [ecoViewed, setEcoViewed]     = useState([])
 
   // ── ACTIONS ──────────────────────────────────────────────────────────────
   const [actions, setActions] = useState([])
@@ -298,17 +339,9 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
     return { total, todayVal, monthlyInc, extraPct, planYears, delayRet }
   }
 
-  // Tailored plans (Discovery Contribution Optimiser model)
-  const plans = useMemo(() => {
-    if (!projection) return []
-    return [
-      { id:'p1', label:'1% per year, for 5 years',  sub:'Gentle increase on salary increase dates',  ...(projectPlan(1,5)||{}) },
-      { id:'p2', label:'2% per year, for 7 years',  sub:'Steady increase on salary increase dates',  ...(projectPlan(2,7)||{}) },
-      { id:'p3', label:'4% per year, for 4 years',  sub:'Accelerated catch-up',                       ...(projectPlan(4,4)||{}) },
-      { id:'p4', label:`Retire at ${retAge+2}`,      sub:'Work 2 more years, same contributions',     ...(projectPlan(0,0,2)||{}) },
-    ].filter(p=>p.monthlyInc)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projection, assumptions, existingFunds, salaryNum, retAge])
+  // Contribution plans removed — Tailored Plans now presents the Discovery
+  // ecosystem first. No additional retirement contribution is requested here.
+  const plans = []
 
   const activePlan      = plans.find(p=>p.id===selectedPlan)
   const displayedIncome = activePlan ? activePlan.monthlyInc : (projection?.monthlyInc||0)
@@ -651,9 +684,9 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
                             </div>
                           ))}
                         </div>
-                        <div style={{textAlign:'left',border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',marginBottom:16,borderLeft:'4px solid #1e5fd9'}}>
-                          <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:6}}>Tailored contribution plans</div>
-                          <div style={{fontSize:11.5,color:'#374151',lineHeight:1.55}}>On your salary increase dates, we will increase your contributions by:</div>
+                        <div style={{textAlign:'left',border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',marginBottom:16,borderLeft:'4px solid #7c3aed'}}>
+                          <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:6}}>Tailored plans</div>
+                          <div style={{fontSize:11.5,color:'#374151',lineHeight:1.55}}>Before looking at contributions, see what is available simply by engaging with the Discovery ecosystem.</div>
                         </div>
                         <button onClick={()=>setPhase(3)}
                           style={{width:'100%',padding:'12px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
@@ -662,41 +695,63 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
                       </div>
                     )}
 
-                    {/* ── SCREEN 3: PICK A PLAN ── */}
+                    {/* ── SCREEN 3: TAILORED PLANS — DISCOVERY ECOSYSTEM ── */}
                     {journeyPhase===3 && (
-                      <div style={{textAlign:'center'}}>
-                        <GoalRing projected={displayedIncome} goal={effectiveGoal} planActive={!!activePlan} size={160}/>
-                        <div style={{textAlign:'left',border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 14px',marginTop:14,boxShadow:'0 4px 18px rgba(0,0,0,0.08)',borderLeft:'4px solid #1e5fd9'}}>
-                          <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:4}}>Tailored contribution plans</div>
-                          <div style={{fontSize:11,color:'#374151',marginBottom:12,lineHeight:1.5}}>On your salary increase dates, we will increase your contributions by:</div>
-                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-                            {plans.map(p=>{
-                              const selected = selectedPlan===p.id
-                              const meets    = p.monthlyInc >= effectiveGoal
-                              return (
-                                <button key={p.id} onClick={()=>setSelPlan(selected?null:p.id)}
-                                  style={{padding:'10px 10px',borderRadius:8,border:`1.5px solid ${selected?'#1e5fd9':T.border}`,background:selected?'#eff6ff':'#fafafa',cursor:'pointer',textAlign:'left',fontFamily:'inherit',transition:'all .15s'}}>
-                                  <div style={{fontSize:11.5,fontWeight:800,color:T.text,lineHeight:1.35,marginBottom:5}}>{p.label}</div>
-                                  <div style={{fontSize:12,fontWeight:900,color:meets?'#059669':'#e8536f',fontFamily:'monospace',marginBottom:4}}>{R(p.monthlyInc)}/mo</div>
-                                  <div style={{fontSize:10,fontWeight:700,color:selected?'#1e5fd9':T.gray}}>{selected?'● Selected':'○ Select'}</div>
-                                </button>
-                              )
-                            })}
+                      <div>
+                        <div style={{textAlign:'center',marginBottom:14}}>
+                          <div style={{fontSize:16,fontWeight:800,color:'#7c3aed',marginBottom:5}}>Tailored plans</div>
+                          <div style={{fontSize:11.5,color:'#374151',lineHeight:1.6}}>
+                            What can {member.firstName||'the member'} gain simply by engaging with the Discovery ecosystem?
+                            No additional retirement contribution is required to access any of this.
                           </div>
-                          <button
-                            disabled={!activePlan}
-                            onClick={()=>{
-                              const t = `Contribution Plan: ${activePlan.label}`
-                              if (!actions.find(a=>a.type===t)) addAction(t, `Projected income ${R(activePlan.monthlyInc)}/mo vs goal ${R(effectiveGoal)}/mo`)
-                              next()
-                            }}
-                            style={{width:'100%',padding:'11px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13,fontWeight:800,cursor:activePlan?'pointer':'not-allowed',fontFamily:'inherit',opacity:activePlan?1:0.45}}>
-                            Confirm plan
-                          </button>
                         </div>
-                        {!activePlan && displayedIncome>=effectiveGoal && (
-                          <div style={{marginTop:10,fontSize:11.5,color:'#059669',fontWeight:700}}>Already on track — no plan required. Continue with Next below.</div>
-                        )}
+
+                        {ECOSYSTEM_SECTIONS.map(sec => {
+                          const open = ecoOpen === sec.id
+                          return (
+                            <div key={sec.id} style={{border:`1.5px solid ${open?sec.clr:T.border}`,borderRadius:11,marginBottom:9,overflow:'hidden',background:'#fff'}}>
+                              <button onClick={()=>{ setEcoOpen(open?null:sec.id); if(!ecoViewed.includes(sec.id)) setEcoViewed(v=>[...v,sec.id]) }}
+                                style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,padding:'12px 14px',background:open?sec.clr+'0d':'#fff',border:'none',cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}>
+                                <div>
+                                  <div style={{fontSize:13,fontWeight:800,color:open?sec.clr:T.text}}>{sec.title}</div>
+                                  <div style={{fontSize:10.5,color:T.gray,marginTop:2}}>{sec.sub}</div>
+                                </div>
+                                <span style={{fontSize:15,color:open?sec.clr:T.gray,flexShrink:0}}>{open?'−':'+'}</span>
+                              </button>
+                              {open && (
+                                <div style={{padding:'0 14px 13px'}}>
+                                  {sec.items.map(it => (
+                                    <div key={it.name} style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,padding:'7px 0',borderTop:'1px solid #f3f4f6'}}>
+                                      <div>
+                                        <div style={{fontSize:12,fontWeight:600,color:T.text}}>{it.name}</div>
+                                        {it.detail && <div style={{fontSize:10.5,color:T.gray,marginTop:2,lineHeight:1.45}}>{it.detail}</div>}
+                                      </div>
+                                      {it.value && <span style={{fontSize:11,fontWeight:800,color:sec.clr,whiteSpace:'nowrap'}}>{it.value}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+
+                        <div style={{marginTop:12,padding:'11px 14px',borderRadius:9,background:'#f5f3ff',border:'1px solid #ddd6fe',fontSize:11.5,color:'#5b21b6',lineHeight:1.6}}>
+                          Engagement values shown are <strong>maximum potential</strong> amounts available through the programme.
+                          They are not amounts the member automatically receives.
+                        </div>
+
+                        <button
+                          onClick={()=>{
+                            if (ecoViewed.length && !actions.find(a=>a.type==='Discovery Ecosystem Presented'))
+                              addAction('Discovery Ecosystem Presented', `Sections presented: ${ecoViewed.join(', ')}`)
+                            next()
+                          }}
+                          style={{marginTop:14,width:'100%',padding:'12px',background:'#7bc043',border:'none',borderRadius:8,color:'#fff',fontSize:13.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+                          Continue → Transfer Boost, Contribution Boost & long-term modelling
+                        </button>
+                        <div style={{fontSize:10,color:T.gray,textAlign:'center',marginTop:7}}>
+                          {ecoViewed.length} of {ECOSYSTEM_SECTIONS.length} sections presented
+                        </div>
                       </div>
                     )}
                   </div>
