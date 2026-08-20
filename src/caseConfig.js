@@ -57,6 +57,9 @@ export const CASE_CONFIG = [
   // ── Benefit Update ──────────────────────────────────────────────────────
   { type:'Benefit Update', category:'Member Review', slaDays:5, workflow:'Benefit Update' },
 
+  // ── Member Review ───────────────────────────────────────────────────────
+  { type:'Member Review',  category:'Member Review', slaDays:5, workflow:'Member Review' },
+
   // ── Query ───────────────────────────────────────────────────────────────
   { type:'Query', category:'Medical reinstatement',   slaDays:2,  workflow:null },
   { type:'Query', category:'Addition of dependent',   slaDays:2,  workflow:null },
