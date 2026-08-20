@@ -353,6 +353,11 @@ export default function App() {
           onAddBillingTask={addBillingTask}
           onLaunchInduction={(c) => setInduction(c)}
           onLaunchConsultation={(c) => setFCCase(c)}
+          onLaunchJourney={(c) => {
+            // Reuse the EXISTING FinancialJourney with the saved wizard result
+            if (!c.consultationResult) return
+            setJourneyData({ consultation: c.consultationResult, caseData: c })
+          }}
         />
       )}
 

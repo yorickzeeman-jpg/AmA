@@ -6,7 +6,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
-export default function CaseDetail({ c, employers, users, members = [], currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation }) {
+export default function CaseDetail({ c, employers, users, members = [], currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation, onLaunchJourney }) {
   const [tab, setTab]   = useState('Overview')
   const [note, setNote] = useState('')
 
@@ -244,13 +244,13 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
               )}
 
               {/* Digital Induction + Financial Consultation for New Employee cases */}
-              {c.caseTypeName === 'New' && (onLaunchInduction || onLaunchConsultation) && (
+              {['New','Member Review','Benefit Update'].includes(c.caseTypeName) && (onLaunchInduction || onLaunchConsultation) && (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   {onLaunchConsultation && (
                     <div style={{ background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
                       <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>📊 Financial Consultation Workspace</div>
                       <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
-                        Guided 7-step consultation — loads employer benefits automatically, calculates contributions, checks underwriting, projects retirement, generates adviser insights and creates actions.
+                        Guided consultation — loads {c.memberName || 'the member'}'s salary, AVCs, fund value and date of birth automatically, calculates contributions, checks underwriting, projects retirement and generates adviser insights.
                       </div>
                       <button onClick={() => onLaunchConsultation(c)}
                         style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:T.navy, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
@@ -258,7 +258,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
                       </button>
                     </div>
                   )}
-                  {onLaunchInduction && (
+                  {onLaunchInduction && c.caseTypeName === 'New' && (
                     <div style={{ background:`linear-gradient(135deg,#059669,#047857)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
                       <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>🎯 Digital Induction Wizard</div>
                       <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
@@ -298,7 +298,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 
           {/* ── WORKFLOW ── */}
           {tab === 'Workflow' && (
-            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask} setTab={setTab}/>
+            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask} setTab={setTab} onLaunchConsultation={onLaunchConsultation} onLaunchJourney={onLaunchJourney}/>
           )}
 
           {/* ── DOCUMENTS ── */}
@@ -397,7 +397,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 // ═════════════════════════════════════════════════════════════════════════════
 // WORKFLOW PANEL — interactive step management
 // ═════════════════════════════════════════════════════════════════════════════
-function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab }) {
+function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab, onLaunchConsultation, onLaunchJourney }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
   const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
@@ -679,6 +679,35 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setT
                           <input type="date" defaultValue={c.extraFields?.date_claim_paid || ''} onBlur={e=>saveExtra('date_claim_paid', e.target.value)} style={inputSt}/>
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Launch the EXISTING Financial Wizard from the consultation /
+                      projection steps, and the Better Financial Journey from its step. */}
+                  {canEdit && /financial consultation|retirement projection/i.test(s.name) && onLaunchConsultation && (
+                    <div style={{ marginBottom:12, background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:10, padding:'14px 16px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:3 }}>Financial Wizard</div>
+                      <div style={{ fontSize:11, opacity:0.75, lineHeight:1.55, marginBottom:11 }}>
+                        Opens with {c.memberName || 'this member'}'s details already loaded — salary, AVCs, fund value and
+                        date of birth pull through from the case. The retirement projection runs inside the wizard.
+                      </div>
+                      <button onClick={() => onLaunchConsultation(c)}
+                        style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:T.navy, fontSize:12.5, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
+                        ⚡ Open Financial Wizard →
+                      </button>
+                    </div>
+                  )}
+                  {canEdit && /better financial journey/i.test(s.name) && onLaunchJourney && (
+                    <div style={{ marginBottom:12, background:'linear-gradient(135deg,#0b1220,#1b1440)', borderRadius:10, padding:'14px 16px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:3 }}>Better Financial Journey</div>
+                      <div style={{ fontSize:11, opacity:0.75, lineHeight:1.55, marginBottom:11 }}>
+                        Transfer Boost · Contribution Boost · Long-term modelling · Discovery ecosystem.
+                        {!c.consultationResult && ' Complete the Financial Wizard first so the journey has the member\'s position.'}
+                      </div>
+                      <button onClick={() => onLaunchJourney(c)} disabled={!c.consultationResult}
+                        style={{ padding:'9px 18px', background: c.consultationResult ? '#fff' : 'rgba(255,255,255,0.25)', border:'none', borderRadius:8, color: c.consultationResult ? '#1b1440' : 'rgba(255,255,255,0.6)', fontSize:12.5, fontWeight:800, cursor: c.consultationResult ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
+                        ⚡ Open Better Financial Journey →
+                      </button>
                     </div>
                   )}
 
