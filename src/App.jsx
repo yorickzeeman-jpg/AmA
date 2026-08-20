@@ -47,6 +47,8 @@ function normCase(row) {
     closedAt:       row.closed_at || null,
     financialJourney: row.financial_journey || null,
     transferBoost:  row.transfer_boost || null,
+    memberPhone:    row.member_phone || null,
+    memberEmail:    row.member_email || null,
     masterCaseType: row.master_case_type || null,
     caseCategory:   row.case_category || null,
     slaNote:        row.sla_note || null,

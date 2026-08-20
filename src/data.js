@@ -127,6 +127,25 @@ export const INITIAL_CATEGORIES = [
 export const INITIAL_CASE_TYPES = [
   // ── Member Administration ──────────────────────────────────────────────────
   {
+    id:'ct_benefit_update', categoryId:'cat1', name:'Benefit Update',
+    slaLabel:'5 Business Days', slaDays:5, slaUnit:'business_days',
+    escalationDays:2, responsibleTeam:'Financial Advisers Pool',
+    isBillingTrigger:false, isInternal:false,
+    directAssignTo:null, pool:'advisers',
+    requiredDocs:['Beneficiary Nomination Form'],
+    stages:[
+      { id:'s1', name:'Receive Notification',          owner:'administrator',     notify:true },
+      { id:'s2', name:'Verify Employment',             owner:'administrator',     notify:false },
+      { id:'s3', name:'Conduct Benefit Session',       owner:'financial_adviser', notify:true },
+      { id:'s4', name:'Capture Beneficiaries',         owner:'financial_adviser', notify:false, requiredDocs:['Beneficiary Nomination Form'] },
+      { id:'s5', name:'Capture Financial Information', owner:'financial_adviser', notify:false },
+      { id:'s6', name:'Financial Consultation',        owner:'financial_adviser', notify:false },
+      { id:'s7', name:'Retirement Projection',         owner:'financial_adviser', notify:false },
+      { id:'s8', name:'Submit',                        owner:'financial_adviser', notify:false },
+      { id:'s9', name:'Complete',                      owner:'financial_adviser', notify:true },
+    ],
+  },
+  {
     id:'ct_new_employee', categoryId:'cat1', name:'New Employee',
     slaLabel:'2 Business Days', slaDays:2, slaUnit:'business_days',
     escalationDays:1, responsibleTeam:'Financial Advisers Pool',
@@ -615,6 +634,21 @@ function step(id, name, slaDays = 2, requiredDocs = [], autoAction = null) {
 export const WORKFLOW_TEMPLATES = {
 
   // ── SECTION 1: MAIN WORKFLOWS ─────────────────────────────────────────────
+
+  'Benefit Update': {
+    name: 'Benefit Update', category: 'Member Administration', billingTrigger: false,
+    steps: [
+      step(1, 'Receive notification',           1),
+      step(2, 'Verify employment',              1),
+      step(3, 'Conduct Benefit Session',        2),
+      step(4, 'Capture beneficiaries',          1, ['Beneficiary Nomination Form']),
+      step(5, 'Capture financial information',  1),
+      step(6, 'Financial consultation',         2),
+      step(7, 'Retirement projection',          1),
+      step(8, 'Submit',                         1),
+      step(9, 'Complete',                       1),
+    ],
+  },
 
   'Exit': {
     name: 'Exit', category: 'Exits', billingTrigger: true,

@@ -52,6 +52,10 @@ export const CASE_CONFIG = [
   { type:'New Entrant', category:'Healthy Company Activation', slaDays:4, workflow:null },
   { type:'New Entrant', category:'New Entrant Consultation',   slaDays:2, workflow:'New' },
   { type:'New Entrant', category:'Transfer to ER group',       slaDays:4, workflow:null },
+  { type:'New Entrant', category:'Member Review',              slaDays:5, workflow:'Benefit Update' },
+
+  // ── Benefit Update ──────────────────────────────────────────────────────
+  { type:'Benefit Update', category:'Member Review', slaDays:5, workflow:'Benefit Update' },
 
   // ── Query ───────────────────────────────────────────────────────────────
   { type:'Query', category:'Medical reinstatement',   slaDays:2,  workflow:null },

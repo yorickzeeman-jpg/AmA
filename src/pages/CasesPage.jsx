@@ -207,7 +207,7 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
 
       {showNew && (
         <NewCaseModal
-          employers={employers} users={users}
+          employers={employers} users={users} cases={cases}
           currentUser={currentUser} workspace={workspace}
           onClose={()=>setShowNew(false)}
           onSubmit={c=>{ onAddCase(c); setShowNew(false) }}
@@ -219,7 +219,7 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
 }
 
 // ─── NEW CASE MODAL — 3 steps ─────────────────────────────────────────────────
-function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSubmit, onAddBillingTask }) {
+function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onClose, onSubmit, onAddBillingTask }) {
   const isEmployer = ['employer_admin','employer_user'].includes(currentUser.role)
   const [step, setStep]           = useState(1)  // 1=category, 2=case type, 3=details
   const [selectedCategory, setCat] = useState('')
@@ -229,7 +229,7 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
   const [attachedFiles, setFiles]  = useState([])
   const [form, setForm] = useState({
     employerId: isEmployer ? currentUser.employer : '',
-    priority: 'Medium', memberName:'', memberId:'', description:'', extraFields:{},
+    priority: 'Medium', memberName:'', memberId:'', memberPhone:'', memberEmail:'', description:'', extraFields:{},
   })
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
@@ -246,9 +246,18 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
     }
     const now   = new Date().toISOString()
     const today = now.split('T')[0]
-    // Allocate using pool logic
-    const generalPool = users.filter(u => ['administrator','general_manager'].includes(u.role) && u.status==='active')
-    const assignedTo  = generalPool[Math.floor(Math.random()*generalPool.length)]?.id || ''
+    // Allocate using pool logic. Advice work (Benefit Update / Member Review /
+    // New Entrant Consultation) must reach a qualified Financial Adviser —
+    // factual administration stays with administrators.
+    const needsAdviser = ['Benefit Update','Member Review','New Entrant Consultation'].includes(cfgCategory)
+                      || cfgType === 'Benefit Update'
+    const pool = needsAdviser
+      ? users.filter(u => u.role === 'financial_adviser' && u.status === 'active')
+      : users.filter(u => ['administrator','general_manager'].includes(u.role) && u.status === 'active')
+    // Round robin on open case count — least loaded first
+    const counts = Object.fromEntries(pool.map(u => [u.id, cases.filter(c => c.assignedTo===u.id && !['Closed'].includes(c.status)).length]))
+    const ordered = [...pool].sort((a,b) => (counts[a.id]||0) - (counts[b.id]||0))
+    const assignedTo  = ordered[0]?.id || ''
     const assignedUser = users.find(u=>u.id===assignedTo)
     const caseRef = genRef('AEB')
     const wf = initWorkflow(selectedType)
@@ -273,8 +282,10 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
       employerId: form.employerId,
       status:'Submitted', priority:form.priority,
       assignedTo, createdBy:currentUser.id,
-      memberName: form.memberName||null,
-      memberId:   form.memberId||null,
+      memberName:  form.memberName||null,
+      memberId:    form.memberId||null,
+      memberPhone: form.memberPhone||null,
+      memberEmail: form.memberEmail||null,
       currentStage:0, stageHistory:[],
       created:today,
       slaDate: masterCfg
@@ -448,15 +459,10 @@ function NewCaseModal({ employers, users, currentUser, workspace, onClose, onSub
                   </select>
                 </Field>
               )}
-              <Field label="Priority">
-                <div style={{ display:'flex', gap:6 }}>
-                  {['Low','Medium','High','Critical'].map(p=>(
-                    <button key={p} onClick={()=>set('priority',p)} style={{ flex:1, padding:'7px 2px', borderRadius:7, border:`1.5px solid ${form.priority===p?T.orange:T.border}`, background:form.priority===p?T.orange:'#fff', color:form.priority===p?'#fff':'#374151', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>{p}</button>
-                  ))}
-                </div>
-              </Field>
               <Field label="Member Name"><input value={form.memberName} onChange={e=>set('memberName',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
-              <Field label="Member ID / Reference"><input value={form.memberId} onChange={e=>set('memberId',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
+              <Field label="Member ID Number"><input value={form.memberId} onChange={e=>set('memberId',e.target.value)} style={inputSt} placeholder="13-digit SA ID / reference"/></Field>
+              <Field label="Member Mobile Number"><input value={form.memberPhone} onChange={e=>set('memberPhone',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
+              <Field label="Member Email Address"><input value={form.memberEmail} onChange={e=>set('memberEmail',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
 
               {/* Death claim required fields */}
               {template?.requiredFields?.length > 0 && (

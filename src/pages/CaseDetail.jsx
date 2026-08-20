@@ -102,6 +102,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                   ['Created',     c.created],
                   ['Member',      c.memberName || '—'],
                   ['Member ID',   c.memberId || '—'],
+                  ['Mobile',      c.memberPhone || '—'],
+                  ['Email',       c.memberEmail || '—'],
+                  ['Case Type',   c.masterCaseType || c.caseTypeName || '—'],
+                  ['Case Category', c.caseCategory || '—'],
                 ].map(([k,v]) => (
                   <div key={k}>
                     <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>{k}</div>
