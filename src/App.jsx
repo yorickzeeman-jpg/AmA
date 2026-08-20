@@ -21,6 +21,7 @@ import SLAConfig from './pages/admin/SLAConfig.jsx'
 import LeandreAI from './pages/LeandreAI.jsx'
 import FinancialInsight from './pages/FinancialInsight.jsx'
 import FinancialConsultation from './pages/FinancialConsultation.jsx'
+import FinancialJourney from './pages/FinancialJourney.jsx'
 import FuneralClaims from './pages/FuneralClaims.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
@@ -43,6 +44,7 @@ function normCase(row) {
     resolvedDate:   row.resolved_date || null,
     closedBy:       row.closed_by || null,
     closedAt:       row.closed_at || null,
+    financialJourney: row.financial_journey || null,
     masterCaseType: row.master_case_type || null,
     caseCategory:   row.case_category || null,
     slaNote:        row.sla_note || null,
@@ -84,6 +86,7 @@ export default function App() {
   const [openProfileEmp, setOpenProfileEmp]         = useState(null)
   const [financialInsightMember, setFIMember]        = useState(null)
   const [financialConsultCase, setFCCase]             = useState(null)
+  const [journeyData, setJourneyData]                 = useState(null)   // { consultation, caseData }
   // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
   const [workflowConfig, setWorkflowConfig] = useState(() => {
     try {
@@ -386,8 +389,34 @@ export default function App() {
           onClose={()=>setFCCase(null)}
           onComplete={(result)=>{
             console.log('[FinancialConsultation] Complete:', result)
-            updateCase({...financialConsultCase, status:'Consultation Complete', consultationResult:result})
+            const updated = {...financialConsultCase, status:'Consultation Complete', consultationResult:result}
+            updateCase(updated)
             setFCCase(null)
+            // ADD-ON: continue into the Financial Journey presentation
+            setJourneyData({ consultation: result, caseData: updated })
+          }}
+        />
+      )}
+
+      {journeyData && (
+        <FinancialJourney
+          consultation={journeyData.consultation}
+          caseData={journeyData.caseData}
+          employer={employers.find(e=>e.id===journeyData.caseData?.employerId)}
+          currentUser={user}
+          onClose={()=>setJourneyData(null)}
+          onSaveJourney={(journey)=>{
+            const c = journeyData.caseData
+            updateCase({
+              ...c,
+              financialJourney: journey,
+              audit: [...(c.audit||[]), {
+                time: new Date().toISOString(), user: user.id, type:'update',
+                action: journey.requestToProceed
+                  ? `Financial Journey — request to proceed recorded by ${user.name}`
+                  : `Financial Journey saved by ${user.name} (${journey.optionsViewed?.length||0} viewed, ${journey.optionsModelled?.length||0} modelled)`,
+              }],
+            })
           }}
         />
       )}
