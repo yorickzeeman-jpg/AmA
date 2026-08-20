@@ -258,8 +258,8 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
     firstName:  reg.memberName || caseData?.memberName?.split(' ')[0] || '',
     surname:    reg.surname    || caseData?.memberName?.split(' ').slice(1).join(' ') || '',
     idNumber:   reg.idNumber   || caseData?.memberId || '',
-    dob:        reg.dateOfBirth || reg.dob || '',
-    salary:     reg.salary || reg.riskSalary || '',
+    dob:        caseData?.memberFinancials?.dateOfBirth ?? reg.dateOfBirth ?? reg.dob ?? '',
+    salary:     caseData?.memberFinancials?.salary ?? reg.salary ?? reg.riskSalary ?? '',
     memberNo:   reg.membershipNo || reg.memberNo || '',
     payrollNo:  reg.payrollNumber || '',
     category:   reg.benefitCategory || caseData?.benefitCategory || benefitProfile?.retirementFund?.contributionCategories?.[0]?.category || 'Category 1',
@@ -268,7 +268,11 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
   })
 
   // ── FINANCIAL JOURNEY ────────────────────────────────────────────────────
+  const seedFund = caseData?.memberFinancials?.fundValue ?? reg.fundValue ?? 0
+  const seedAvc  = caseData?.memberFinancials?.avc ?? reg.avc ?? 0
   const [journey, setJourney] = useState(caseData?.consultationResult?.journey || {
+    hasPrevFund: seedFund > 0, prevFundValue: seedFund,
+    avc: seedAvc,
     hasPrevFund:    false, prevFundValue:   0,
     hasPreservation:false, preservationValue:0,
     hasRA:          false, raValue:         0,

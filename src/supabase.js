@@ -271,6 +271,7 @@ export async function saveCase(c) {
     transfer_boost:    c.transferBoost || null,
     member_phone:      c.memberPhone || null,
     member_email:      c.memberEmail || null,
+    member_financials: c.memberFinancials || null,
     master_case_type: c.masterCaseType || null,
     case_category:    c.caseCategory || null,
     sla_note:         c.slaNote || null,

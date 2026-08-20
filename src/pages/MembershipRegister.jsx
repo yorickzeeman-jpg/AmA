@@ -52,6 +52,11 @@ function parseBillingSchedule(text, employerId, sourceFile) {
     premium:   colIdx('premium','total','amount','monthly'),
     status:    colIdx('status'),
     effective: colIdx('effective','start date','date'),
+    // Financial position — required by Member Review / Financial Wizard
+    salary:    colIdx('salary','pensionable','risk salary','monthly salary','basic'),
+    avc:       colIdx('avc','avcs','additional voluntary','voluntary contribution'),
+    fundValue: colIdx('fund value','current fund','retirement value','member share','fund credit'),
+    dob:       colIdx('date of birth','dob','birth date','birthdate'),
   }
 
   const members = []
@@ -79,6 +84,11 @@ function parseBillingSchedule(text, employerId, sourceFile) {
       monthlyPremium:  parseFloat(get(cols.premium).replace(/[R,\s]/g,'')) || 0,
       status:          get(cols.status) || 'Active',
       effectiveDate:   get(cols.effective) || new Date().toISOString().split('T')[0],
+      // Financial position — pulled through to the Financial Wizard
+      salary:          parseFloat(get(cols.salary).replace(/[R,\s]/g,'')) || null,
+      avc:             parseFloat(get(cols.avc).replace(/[R,%\s]/g,'')) || null,
+      fundValue:       parseFloat(get(cols.fundValue).replace(/[R,\s]/g,'')) || null,
+      dateOfBirth:     get(cols.dob) || null,
       sourceFile,
       createdAt:       new Date().toISOString(),
     })

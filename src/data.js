@@ -636,28 +636,28 @@ export const WORKFLOW_TEMPLATES = {
   // ── SECTION 1: MAIN WORKFLOWS ─────────────────────────────────────────────
 
   'Member Review': {
-    name: 'Member Review', category: 'Member Administration', billingTrigger: false,
+    name: 'Member Review', category: 'New Business', billingTrigger: false,
     steps: [
-      step(1, 'Receive notification',           1),
-      step(2, 'Verify employment',              1),
-      step(3, 'Conduct Benefit Session',        2),
-      step(4, 'Capture beneficiaries',          1, ['Beneficiary Nomination Form']),
-      step(5, 'Financial consultation',         2),
-      step(6, 'Retirement projection',          1),
-      step(7, 'Complete',                       1),
+      step(1, 'Receive notification',        1),
+      step(2, 'Verify employment',           1),
+      step(3, 'Conduct Benefits Session',    2, ['Beneficiary Nomination Form']),
+      step(4, 'Financial consultation',      2),
+      step(5, 'Retirement projection',       1),
+      step(6, 'Better Financial Journey',    2),
+      step(7, 'Complete',                    1),
     ],
   },
 
   'Benefit Update': {
-    name: 'Benefit Update', category: 'Member Administration', billingTrigger: false,
+    name: 'Benefit Update', category: 'New Business', billingTrigger: false,
     steps: [
-      step(1, 'Receive notification',           1),
-      step(2, 'Verify employment',              1),
-      step(3, 'Conduct Benefit Session',        2),
-      step(4, 'Capture beneficiaries',          1, ['Beneficiary Nomination Form']),
-      step(5, 'Financial consultation',         2),
-      step(6, 'Retirement projection',          1),
-      step(7, 'Complete',                       1),
+      step(1, 'Receive notification',        1),
+      step(2, 'Verify employment',           1),
+      step(3, 'Conduct Benefits Session',    2, ['Beneficiary Nomination Form']),
+      step(4, 'Financial consultation',      2),
+      step(5, 'Retirement projection',       1),
+      step(6, 'Better Financial Journey',    2),
+      step(7, 'Complete',                    1),
     ],
   },
 

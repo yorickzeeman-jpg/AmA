@@ -49,6 +49,7 @@ function normCase(row) {
     transferBoost:  row.transfer_boost || null,
     memberPhone:    row.member_phone || null,
     memberEmail:    row.member_email || null,
+    memberFinancials: row.member_financials || null,
     masterCaseType: row.master_case_type || null,
     caseCategory:   row.case_category || null,
     slaNote:        row.sla_note || null,
@@ -106,6 +107,13 @@ export default function App() {
         for (const key of ['Death - Funeral', 'Death - Extended Funeral']) {
           if (parsed[key]?.steps?.length < WORKFLOW_TEMPLATES[key]?.steps?.length) {
             merged[key] = WORKFLOW_TEMPLATES[key]
+          }
+        }
+        // Category corrections must win over a stale stored copy, otherwise a
+        // case type can stay filed under the wrong category in the config page.
+        for (const key of Object.keys(WORKFLOW_TEMPLATES)) {
+          if (merged[key] && merged[key].category !== WORKFLOW_TEMPLATES[key].category) {
+            merged[key] = { ...merged[key], category: WORKFLOW_TEMPLATES[key].category }
           }
         }
         localStorage.setItem('aeb_workflow_config', JSON.stringify(merged))
@@ -338,6 +346,7 @@ export default function App() {
           c={openCase}
           employers={employers}
           users={users}
+          members={members}
           currentUser={user}
           onClose={()=>setOpenCase(null)}
           onUpdate={updateCase}

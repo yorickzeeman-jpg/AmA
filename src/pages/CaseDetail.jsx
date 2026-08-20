@@ -6,7 +6,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
-export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation }) {
+export default function CaseDetail({ c, employers, users, members = [], currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation }) {
   const [tab, setTab]   = useState('Overview')
   const [note, setNote] = useState('')
 
@@ -94,6 +94,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
           {/* ── OVERVIEW ── */}
           {tab === 'Overview' && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              {/* Receive Notification: member financial position for review cases */}
+              {['Member Review','Benefit Update'].includes(c.caseTypeName) && (
+                <MemberPosition c={c} members={members} currentUser={currentUser} onUpdate={onUpdate}/>
+              )}
               {/* Meta grid */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
                 {[
@@ -883,6 +887,77 @@ function LeandrePanel({ c, users, currentUser, onGoWorkflow, onGoDocs }) {
           Work the Steps →
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── MEMBER FINANCIAL POSITION (Member Review / Benefit Update) ──────────────
+// Pulls from the membership register via the case's member ID. Missing values
+// are shown as missing and captured here — never silently defaulted.
+function MemberPosition({ c, members, currentUser, onUpdate }) {
+  const reg = (members||[]).find(m =>
+    (c.memberId && (m.idNumber===c.memberId || m.payrollNumber===c.memberId || m.membershipNo===c.memberId)) ||
+    (c.memberName && `${m.memberName||''} ${m.surname||''}`.trim().toLowerCase() === c.memberName.trim().toLowerCase())
+  ) || null
+
+  // Case overrides win over the register (advisor captured a missing value)
+  const ov = c.memberFinancials || {}
+  const val = k => ov[k] ?? reg?.[k] ?? null
+  const R = v => (v||v===0) ? 'R'+Number(v).toLocaleString('en-ZA') : null
+
+  function capture(key, raw) {
+    const v = key==='dateOfBirth' ? raw : (parseFloat(String(raw).replace(/[R,\s]/g,'')) || null)
+    if (v === null || v === '') return
+    onUpdate({
+      ...c,
+      memberFinancials: { ...(c.memberFinancials||{}), [key]: v },
+      audit: [...(c.audit||[]), { time:new Date().toISOString(), user:currentUser.id, type:'update',
+        action:`Member financial position captured — ${key}: ${v}` }],
+    })
+  }
+
+  const rows = [
+    ['Individual Salary',        'salary',      R(val('salary')),      'monthly'],
+    ['AVCs',                     'avc',         R(val('avc')),         'monthly'],
+    ['Current Retirement Fund Value','fundValue',R(val('fundValue')),  'current'],
+    ['Date of Birth',            'dateOfBirth', val('dateOfBirth'),    ''],
+  ]
+  const missing = rows.filter(([,,v]) => !v).length
+
+  return (
+    <div style={{ background:'#fff', border:`1px solid ${missing?'#fed7aa':T.border}`, borderRadius:11, padding:'14px 16px', marginBottom:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ fontSize:11, fontWeight:800, color:T.navy, textTransform:'uppercase', letterSpacing:'0.6px' }}>Member Financial Position</div>
+        {missing>0 && <span style={{ fontSize:10, fontWeight:700, color:'#c2410c', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:12, padding:'2px 9px' }}>{missing} missing</span>}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:10 }}>
+        {[['Member', c.memberName||'—'],['Member ID', c.memberId||'—'],
+          ['Employer', reg?.employerId ? undefined : undefined]].slice(0,2).map(([l,v])=>(
+          <div key={l} style={{ background:'#f9fafb', borderRadius:8, padding:'9px 11px' }}>
+            <div style={{ fontSize:9, color:T.gray, textTransform:'uppercase', marginBottom:2 }}>{l}</div>
+            <div style={{ fontSize:12.5, fontWeight:700 }}>{v}</div>
+          </div>
+        ))}
+        {rows.map(([label,key,value,note])=>(
+          <div key={key} style={{ background: value?'#f9fafb':'#fff7ed', borderRadius:8, padding:'9px 11px', border: value?'none':'1px solid #fed7aa' }}>
+            <div style={{ fontSize:9, color:T.gray, textTransform:'uppercase', marginBottom:2 }}>{label}</div>
+            {value ? (
+              <div style={{ fontSize:13, fontWeight:800, color:T.navy }}>{value}{note && <span style={{ fontSize:9, color:T.gray, fontWeight:400 }}> /{note}</span>}</div>
+            ) : (
+              <input
+                type={key==='dateOfBirth'?'date':'number'}
+                onBlur={e=>capture(key, e.target.value)}
+                placeholder="Not on record — capture"
+                style={{ ...inputSt, padding:'5px 8px', fontSize:12 }}/>
+            )}
+          </div>
+        ))}
+      </div>
+      {!reg && (
+        <div style={{ marginTop:9, fontSize:11, color:'#92400e' }}>
+          Member not matched in the membership register — values captured here are saved to the case.
+        </div>
+      )}
     </div>
   )
 }
