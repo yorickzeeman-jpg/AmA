@@ -87,7 +87,7 @@ function Btn({ children, onClick, primary }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-export default function FinancialJourney({ consultation, caseData, employer, currentUser, onSaveJourney, onClose }) {
+export default function FinancialJourney({ consultation, caseData, employer, currentUser, onSaveJourney, onOpenTransferBoost, onClose }) {
   const [expanded, setExpanded]   = useState(null)
   const [modelled, setModelled]   = useState([])   // options modelled
   const [viewed, setViewed]       = useState([])   // options viewed
@@ -238,7 +238,7 @@ export default function FinancialJourney({ consultation, caseData, employer, cur
             <div style={{ ...CARD, padding:'18px 20px' }}>
               <div style={{ fontSize:12, fontWeight:800, color:'#22d3ee', textTransform:'uppercase', letterSpacing:'1px', marginBottom:6 }}>Transfer Boost</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:14 }}>An immediate uplift to the member's fund on transfer.</div>
-              <Btn onClick={()=>{ track(modelled,setModelled,'Transfer Boost'); alert('Transfer Boost modelling\n\nThe approved Transfer Boost formula has not been supplied yet, so no figure is calculated here.\n\nThis option has been recorded as modelled in the consultation.') }}>Model Transfer Boost</Btn>
+              <Btn primary onClick={()=>{ track(modelled,setModelled,'Transfer Boost'); onOpenTransferBoost?.() }}>Model Transfer Boost</Btn>
               {modelled.includes('Transfer Boost') && <div style={{ fontSize:10.5, color:'#4ade80', marginTop:8 }}>✓ Recorded as modelled</div>}
             </div>
             <div style={{ ...CARD, padding:'18px 20px' }}>

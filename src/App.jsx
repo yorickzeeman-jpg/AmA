@@ -22,6 +22,7 @@ import LeandreAI from './pages/LeandreAI.jsx'
 import FinancialInsight from './pages/FinancialInsight.jsx'
 import FinancialConsultation from './pages/FinancialConsultation.jsx'
 import FinancialJourney from './pages/FinancialJourney.jsx'
+import TransferBoost from './pages/TransferBoost.jsx'
 import FuneralClaims from './pages/FuneralClaims.jsx'
 
 // Convert Supabase snake_case row → app camelCase case object
@@ -45,6 +46,7 @@ function normCase(row) {
     closedBy:       row.closed_by || null,
     closedAt:       row.closed_at || null,
     financialJourney: row.financial_journey || null,
+    transferBoost:  row.transfer_boost || null,
     masterCaseType: row.master_case_type || null,
     caseCategory:   row.case_category || null,
     slaNote:        row.sla_note || null,
@@ -87,6 +89,7 @@ export default function App() {
   const [financialInsightMember, setFIMember]        = useState(null)
   const [financialConsultCase, setFCCase]             = useState(null)
   const [journeyData, setJourneyData]                 = useState(null)   // { consultation, caseData }
+  const [transferBoostData, setTBData]                = useState(null)
   // Workflow config — loaded from WORKFLOW_TEMPLATES, editable via admin
   const [workflowConfig, setWorkflowConfig] = useState(() => {
     try {
@@ -385,6 +388,7 @@ export default function App() {
           caseData={financialConsultCase}
           employer={employers.find(e=>e.id===financialConsultCase.employerId)}
           benefitProfile={benefitProfiles[financialConsultCase.employerId]}
+          members={members}
           currentUser={user}
           onClose={()=>setFCCase(null)}
           onComplete={(result)=>{
@@ -405,6 +409,7 @@ export default function App() {
           employer={employers.find(e=>e.id===journeyData.caseData?.employerId)}
           currentUser={user}
           onClose={()=>setJourneyData(null)}
+          onOpenTransferBoost={()=>setTBData(journeyData)}
           onSaveJourney={(journey)=>{
             const c = journeyData.caseData
             updateCase({
@@ -415,6 +420,27 @@ export default function App() {
                 action: journey.requestToProceed
                   ? `Financial Journey — request to proceed recorded by ${user.name}`
                   : `Financial Journey saved by ${user.name} (${journey.optionsViewed?.length||0} viewed, ${journey.optionsModelled?.length||0} modelled)`,
+              }],
+            })
+          }}
+        />
+      )}
+
+      {transferBoostData && (
+        <TransferBoost
+          consultation={transferBoostData.consultation}
+          caseData={transferBoostData.caseData}
+          employer={employers.find(e=>e.id===transferBoostData.caseData?.employerId)}
+          currentUser={user}
+          onClose={()=>setTBData(null)}
+          onSave={(tb)=>{
+            const c = transferBoostData.caseData
+            updateCase({
+              ...c,
+              transferBoost: tb,
+              audit: [...(c.audit||[]), {
+                time:new Date().toISOString(), user:user.id, type:'update',
+                action:`Transfer Boost modelled by ${user.name} — transfer ${tb.proposedTransferAmount||0} to ${tb.transferDestination||'destination TBC'}`,
               }],
             })
           }}

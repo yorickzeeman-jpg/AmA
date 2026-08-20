@@ -95,7 +95,8 @@ function calcContributions(salary, profile, category) {
   const eeeRF  = salary * (cat.employee/100)
   const total  = empRF + eeeRF
   const risk   = gla + phi
-  const net    = Math.max(total - risk - admin, 0)
+  // Administration cost is NOT deducted from the retirement contribution
+  const net    = Math.max(total - risk, 0)
   return { empRF, eeeRF, total, gla, phi, risk, admin, net, empPct:cat.employer, eeePct:cat.employee }
 }
 
@@ -241,24 +242,33 @@ function FundingGauge({ratio}) {
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN WIZARD
 // ═════════════════════════════════════════════════════════════════════════════
-export default function FinancialConsultation({ caseData, employer, benefitProfile, currentUser, onComplete, onClose }) {
+export default function FinancialConsultation({ caseData, employer, benefitProfile, members = [], currentUser, onComplete, onClose }) {
+  // STEP 1 PULL-THROUGH: locate this member in the membership register so the
+  // adviser never recaptures data the portal already holds.
+  const reg = members.find(m =>
+    (caseData?.memberId && (m.idNumber === caseData.memberId || m.membershipNo === caseData.memberId || m.payrollNumber === caseData.memberId)) ||
+    (caseData?.memberName && `${m.memberName||''} ${m.surname||''}`.trim().toLowerCase() === caseData.memberName.trim().toLowerCase())
+  ) || {}
   const [stepIdx, setStepIdx] = useState(0)
   const [saved, setSaved]     = useState(false)
 
   // ── MEMBER PROFILE ────────────────────────────────────────────────────────
-  const [member, setMember] = useState({
-    firstName:  caseData?.memberName?.split(' ')[0] || '',
-    surname:    caseData?.memberName?.split(' ').slice(1).join(' ') || '',
-    idNumber:   caseData?.memberId || '',
-    dob:        '',
-    salary:     '',
-    category:   caseData?.benefitCategory || benefitProfile?.retirementFund?.contributionCategories?.[0]?.category || 'Category 1',
-    startDate:  caseData?.created || new Date().toISOString().split('T')[0],
-    department: '',
+  const prior = caseData?.consultationResult?.member || null   // reopened consultation
+  const [member, setMember] = useState(prior || {
+    firstName:  reg.memberName || caseData?.memberName?.split(' ')[0] || '',
+    surname:    reg.surname    || caseData?.memberName?.split(' ').slice(1).join(' ') || '',
+    idNumber:   reg.idNumber   || caseData?.memberId || '',
+    dob:        reg.dateOfBirth || reg.dob || '',
+    salary:     reg.salary || reg.riskSalary || '',
+    memberNo:   reg.membershipNo || reg.memberNo || '',
+    payrollNo:  reg.payrollNumber || '',
+    category:   reg.benefitCategory || caseData?.benefitCategory || benefitProfile?.retirementFund?.contributionCategories?.[0]?.category || 'Category 1',
+    startDate:  reg.effectiveDate || reg.startDate || caseData?.created || new Date().toISOString().split('T')[0],
+    department: reg.department || '',
   })
 
   // ── FINANCIAL JOURNEY ────────────────────────────────────────────────────
-  const [journey, setJourney] = useState({
+  const [journey, setJourney] = useState(caseData?.consultationResult?.journey || {
     hasPrevFund:    false, prevFundValue:   0,
     hasPreservation:false, preservationValue:0,
     hasRA:          false, raValue:         0,
@@ -528,7 +538,6 @@ export default function FinancialConsultation({ caseData, employer, benefitProfi
                     <div style={{height:6}}/>
                     <Row label={`Group Life Premium (${Pct(benefitProfile?.groupLife?.rate)})`} value={`-${R(contribs.gla)}`} color={T.red}/>
                     <Row label={`PHI Premium (${Pct(benefitProfile?.disability?.rate)})`}      value={`-${R(contribs.phi)}`} color={T.red}/>
-                    <Row label="Administration Cost" value={`-${R(contribs.admin)}`} color={T.gray}/>
                     <div style={{height:8,borderTop:`2px solid ${T.border}`,margin:'8px 0'}}/>
                     <Row label="Net Monthly Investment into Retirement Fund" value={R(contribs.net)} bold color='#059669'/>
                   </Card>

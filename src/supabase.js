@@ -268,6 +268,7 @@ export async function saveCase(c) {
     closed_by:      c.closedBy || null,
     closed_at:      c.closedAt || null,
     financial_journey: c.financialJourney || null,
+    transfer_boost:    c.transferBoost || null,
     master_case_type: c.masterCaseType || null,
     case_category:    c.caseCategory || null,
     sla_note:         c.slaNote || null,
