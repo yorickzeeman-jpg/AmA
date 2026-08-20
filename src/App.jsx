@@ -41,6 +41,8 @@ function normCase(row) {
     assignedTo:     row.assigned_to,
     slaDate:        row.sla_date,
     resolvedDate:   row.resolved_date || null,
+    closedBy:       row.closed_by || null,
+    closedAt:       row.closed_at || null,
     masterCaseType: row.master_case_type || null,
     caseCategory:   row.case_category || null,
     slaNote:        row.sla_note || null,

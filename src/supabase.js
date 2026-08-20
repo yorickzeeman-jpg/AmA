@@ -265,6 +265,8 @@ export async function saveCase(c) {
     assigned_to:    c.assignedTo,
     sla_date:       c.slaDate,
     resolved_date:  c.resolvedDate || null,
+    closed_by:      c.closedBy || null,
+    closed_at:      c.closedAt || null,
     master_case_type: c.masterCaseType || null,
     case_category:    c.caseCategory || null,
     sla_note:         c.slaNote || null,

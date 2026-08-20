@@ -290,7 +290,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
           {/* ── WORKFLOW ── */}
           {tab === 'Workflow' && (
-            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask}/>
+            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask} setTab={setTab}/>
           )}
 
           {/* ── DOCUMENTS ── */}
@@ -389,7 +389,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 // ═════════════════════════════════════════════════════════════════════════════
 // WORKFLOW PANEL — interactive step management
 // ═════════════════════════════════════════════════════════════════════════════
-function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
+function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
   const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
@@ -416,7 +416,10 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
 
   function updateStep(stepId, updates) {
     const step     = steps.find(s => s.id === stepId)
-    const newSteps = steps.map(s => s.id === stepId ? { ...s, ...updates } : s)
+    // Carry any typed-but-unsaved comment through so status changes never lose it
+    const typed    = stepNotes[stepId]
+    const withNote = typed !== undefined ? { notes: typed } : {}
+    const newSteps = steps.map(s => s.id === stepId ? { ...s, ...withNote, ...updates } : s)
     const newWf    = { ...workflow, steps: newSteps, completedAt: newSteps.every(s=>s.status==='Completed'||s.status==='Skipped') ? new Date().toISOString() : null }
     const audit    = [...(c.audit||[]), {
       time:   new Date().toISOString(),
@@ -425,6 +428,81 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
       type:   'workflow',
     }]
     onUpdate({ ...c, workflow: newWf, audit })
+  }
+
+  // FIX: step comments previously lived only in local state and were written
+  // to the case solely by completeStep — so any other action, or leaving the
+  // case, silently discarded them. Now saved on blur against the workflow step.
+  // Final step = last step in the workflow
+  const isFinalStep = st => steps.length > 0 && steps[steps.length-1].id === st.id
+  // Death/funeral claims carry the extra claim information
+  const isDeathClaim = /death|funeral/i.test(`${c.caseTypeName||''} ${c.caseCategory||''} ${c.masterCaseType||''}`)
+
+  // Reuse the existing extraFields store — no duplicate fields created
+  function saveExtra(key, value) {
+    if ((c.extraFields?.[key] || '') === value) return
+    onUpdate({
+      ...c,
+      extraFields: { ...(c.extraFields||{}), [key]: value },
+      audit: [...(c.audit||[]), {
+        time: new Date().toISOString(), user: currentUser.id,
+        action: `Claim information updated — ${key.replace(/_/g,' ')}: ${value || '(cleared)'}`, type:'update',
+      }],
+    })
+  }
+
+  // FIX: complete the final step AND close the case in one explicit action
+  function completeAndClose(s) {
+    if (isDeathClaim) {
+      const missing = [
+        ['Cause of Death',        c.extraFields?.natural_unnatural],
+        ['Relationship to Member',c.extraFields?.relationship],
+        ['Amount Paid',           c.extraFields?.amount_paid],
+      ].filter(([,v]) => !v).map(([l]) => l)
+      if (missing.length) {
+        alert(`Death Claim Information incomplete.\n\nRequired before closing:\n\n${missing.map(m=>`✗ ${m}`).join('\n')}`)
+        return
+      }
+    }
+    if (s.requiredDocs?.length > 0 && (c.documents?.length || 0) < s.requiredDocs.length) {
+      alert(`Required documents outstanding for "${s.name}":\n\n${s.requiredDocs.slice(c.documents?.length||0).map(d=>`✗ ${d}`).join('\n')}`)
+      return
+    }
+    if (!window.confirm('Are you sure you want to complete and close this case?')) return
+
+    const now      = new Date().toISOString()
+    const finalNote = stepNotes[s.id] ?? s.notes ?? ''
+    const newSteps = steps.map(x => x.id === s.id
+      ? { ...x, status:'Completed', completedAt:now, notes:finalNote, noteBy:currentUser.id, noteAt:now }
+      : x)
+    onUpdate({
+      ...c,
+      status:       'Closed',
+      resolvedDate: c.resolvedDate || now.split('T')[0],
+      closedBy:     currentUser.id,
+      closedAt:     now,
+      workflow:     { ...workflow, steps:newSteps, completedAt:now },
+      audit: [...(c.audit||[]), {
+        time: now, user: currentUser.id, type:'status',
+        action: `Case closed from final step "${s.name}" by ${currentUser.name}. Previous status: ${c.status}. Workflow 100% complete.${finalNote?` Final comment: ${finalNote.slice(0,150)}`:''}`,
+      }],
+    })
+    setTab('Overview')
+  }
+
+  function saveStepNote(s) {
+    const text = stepNotes[s.id]
+    if (text === undefined || text === (s.notes || '')) return
+    const newSteps = steps.map(x => x.id === s.id
+      ? { ...x, notes: text, noteBy: currentUser.id, noteAt: new Date().toISOString() }
+      : x)
+    const audit = [...(c.audit||[]), {
+      time:   new Date().toISOString(),
+      user:   currentUser.id,
+      action: `Comment saved on step "${s.name}": ${text.slice(0,120)}${text.length>120?'…':''}`,
+      type:   'note',
+    }]
+    onUpdate({ ...c, workflow: { ...workflow, steps:newSteps }, audit })
   }
 
   function completeStep(s) {
@@ -564,6 +642,38 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                     </div>
                   )}
 
+                  {/* Death Claim Information — final step of a death/funeral claim */}
+                  {canEdit && isFinalStep(s) && isDeathClaim && (
+                    <div style={{ marginBottom:12, background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:10, padding:'13px 15px' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'#c2410c', marginBottom:3 }}>Death Claim Information</div>
+                      <div style={{ fontSize:11, color:T.gray, marginBottom:10 }}>Complete before finalising the claim.</div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Cause of Death <span style={{color:T.red}}>*</span></label>
+                          <select value={c.extraFields?.natural_unnatural || ''} onChange={e=>saveExtra('natural_unnatural', e.target.value)} style={inputSt}>
+                            <option value="">Select…</option>
+                            <option>Natural</option>
+                            <option>Unnatural</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Relationship to Member <span style={{color:T.red}}>*</span></label>
+                          <input defaultValue={c.extraFields?.relationship || ''} onBlur={e=>saveExtra('relationship', e.target.value)}
+                            placeholder="Main Member, Spouse, Child…" style={inputSt}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Amount Paid (R) <span style={{color:T.red}}>*</span></label>
+                          <input type="number" defaultValue={c.extraFields?.amount_paid || ''} onBlur={e=>saveExtra('amount_paid', e.target.value)}
+                            placeholder="0.00" style={inputSt}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Date Claim Paid</label>
+                          <input type="date" defaultValue={c.extraFields?.date_claim_paid || ''} onBlur={e=>saveExtra('date_claim_paid', e.target.value)} style={inputSt}/>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Notes */}
                   {canEdit && (
                     <div style={{ marginBottom:10 }}>
@@ -571,9 +681,15 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                       <textarea
                         value={stepNotes[s.id] ?? s.notes ?? ''}
                         onChange={e => setStepNotes(n => ({...n, [s.id]: e.target.value}))}
+                        onBlur={() => saveStepNote(s)}
                         placeholder="Add notes for this step…"
                         style={{ ...inputSt, minHeight:60, resize:'vertical', width:'100%' }}
                       />
+                      {s.notes && (
+                        <div style={{ fontSize:10, color:'#059669', marginTop:4 }}>
+                          ✓ Saved{s.noteAt ? ` ${s.noteAt.split('T')[0]}` : ''}{s.noteBy ? ` by ${users.find(u=>u.id===s.noteBy)?.name || ''}` : ''}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -589,10 +705,16 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                           </button>
                         )
                       })}
-                      {s.status !== 'Completed' && (
+                      {s.status !== 'Completed' && !isFinalStep(s) && (
                         <button onClick={() => completeStep(s)}
                           style={{ padding:'5px 14px', borderRadius:20, background:T.green, border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
                           ✓ Mark Complete
+                        </button>
+                      )}
+                      {isFinalStep(s) && c.status !== 'Closed' && (
+                        <button onClick={() => completeAndClose(s)}
+                          style={{ padding:'6px 16px', borderRadius:20, background:T.navy, border:'none', color:'#fff', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
+                          ✓ Complete &amp; Close Case
                         </button>
                       )}
                     </div>
