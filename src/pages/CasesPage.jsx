@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import {
-  T, genRef, calcSlaDate, allocateCase, addBusinessDays, slaStatus,
+  T, genRef, calcSlaDate, allocateCase, addBusinessDays, slaStatus, ROUND_ROBIN_MEMBER_IDS,
   WORKFLOW_TEMPLATES, WORKFLOW_CATEGORIES, CASE_TYPES_BY_CATEGORY,
   CASE_STATUSES, PRIORITIES, STEP_STATUS_CONFIG,
   initWorkflow, workflowProgress, currentStep,
@@ -253,7 +253,10 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
                       || cfgType === 'Benefit Update'
     const pool = needsAdviser
       ? users.filter(u => u.role === 'financial_adviser' && u.status === 'active')
-      : users.filter(u => ['administrator','general_manager'].includes(u.role) && u.status === 'active')
+      // General round-robin rotates between Mahlatse, Sesi and Nokulunga only
+      : ROUND_ROBIN_MEMBER_IDS
+          .map(id => users.find(u => u.id === id && u.status === 'active'))
+          .filter(Boolean)
     // Round robin on open case count — least loaded first
     const counts = Object.fromEntries(pool.map(u => [u.id, cases.filter(c => c.assignedTo===u.id && !['Closed'].includes(c.status)).length]))
     const ordered = [...pool].sort((a,b) => (counts[a.id]||0) - (counts[b.id]||0))

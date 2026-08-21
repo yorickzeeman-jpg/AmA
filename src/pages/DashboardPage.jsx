@@ -1,4 +1,4 @@
-import { T, INITIAL_CATEGORIES, slaStatus } from '../data.js'
+import { T, INITIAL_CATEGORIES, slaStatus, canViewAllCases } from '../data.js'
 import { KPI, BarRow, Card, CardHead, StatusBadge, SLAChip, Icon, Empty } from '../ui.jsx'
 
 function calcHealthScore(open, overdue, billingPending, escalated) {
@@ -16,13 +16,16 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
   const isBilling   = role === 'billing_admin'
   const isEmployer  = ['employer_admin','employer_user'].includes(role)
 
-  // Filter to what this user can see
+  // VIEW ACCESS: authorised staff can see every case (cover for leave / client
+  // queries). Employers remain restricted to their own organisation's cases.
   const myCases = cases.filter(c => {
     if (isEmployer) return c.employerId === currentUser.employer && c.workspace === 'employer'
-    if (isAdmin)    return c.assignedTo === currentUser.id
-    if (isBilling)  return c.assignedTo === currentUser.id || c.status === 'Sent to Billing'
-    return true // GM sees all
+    if (canViewAllCases(currentUser)) return true
+    return c.assignedTo === currentUser.id
   })
+
+  // The user's own workload, for the personal KPI view
+  const assignedToMe = cases.filter(c => c.assignedTo === currentUser.id)
 
   const empCases = cases.filter(c => c.workspace === 'employer')
   const intCases = cases.filter(c => c.workspace === 'internal')
@@ -129,6 +132,7 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
       {/* KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:14 }}>
         <KPI label="Open Cases"     value={open.length}      icon="cases"   color={T.blue}  trend={3} onClick={()=>onNav('cases')} />
+        <KPI label="Assigned to Me" value={assignedToMe.filter(c=>!['Closed','Billing Complete'].includes(c.status)).length} icon="cases" color={T.purple} onClick={()=>onNav('cases',{assignee:currentUser.id})} />
         <KPI label="Overdue"        value={overdue.length}   icon="warning" color={T.red}   onClick={()=>onNav('cases',{overdue:true})} />
         <KPI label="Escalated"      value={escalated.length} icon="bell"    color="#be123c" onClick={()=>onNav('cases',{status:'Escalated'})} />
         <KPI label="Completed"      value={closed.length}    icon="check"   color={T.green} sub="All time"/>

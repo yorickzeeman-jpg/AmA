@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { T } from '../data.js'
-import { signInWithName } from '../supabase.js'
+import { signInWithName, requestPasswordReset } from '../supabase.js'
 
 export default function LoginPage({ onLogin }) {
   const [name, setName]         = useState('')
@@ -102,7 +102,7 @@ export default function LoginPage({ onLogin }) {
                   <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:'rgba(139,164,200,0.5)' }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                   </span>
-                  <input value={name} onChange={e=>{setName(e.target.value);setError('')}} onKeyDown={e=>e.key==='Enter'&&handleSignIn()} type="text" placeholder="Enter your first name" autoComplete="username"
+                  <input value={name} onChange={e=>{setName(e.target.value);setError('')}} onKeyDown={e=>e.key==='Enter'&&handleSignIn()} type="text" placeholder="Email address" autoComplete="email"
                     style={{ width:'100%', padding:'12px 12px 12px 40px', background:'rgba(255,255,255,0.06)', border:`1px solid ${error?'rgba(239,68,68,0.5)':'rgba(255,255,255,0.1)'}`, borderRadius:9, color:'#fff', fontSize:14, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }}/>
                 </div>
               </div>
@@ -135,6 +135,16 @@ export default function LoginPage({ onLogin }) {
                   : <><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>Sign In</>
                 }
               </button>
+                <div style={{ textAlign:'center', marginTop:14 }}>
+                  <button onClick={async () => {
+                      if (!name.includes('@')) { setError('Enter your email address first, then tap Forgot password.'); return }
+                      try { await requestPasswordReset(name); setError(''); alert('If that email has an account, a password reset link is on its way.') }
+                      catch(e) { setError(e.message) }
+                    }}
+                    style={{ background:'none', border:'none', color:'rgba(255,255,255,0.6)', fontSize:12, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+                    Forgot password?
+                  </button>
+                </div>
 
               <div style={{ marginTop:16, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.07)', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.2)' }}>
                 AEB Portal · Powered by Amadwala Employee Benefits

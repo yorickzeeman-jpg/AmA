@@ -32,22 +32,103 @@ const LOCAL_USERS = [
   { id:'a0000000-0000-0000-0000-000000000011', name:'Owen',      password:'Yorick2017', role:'financial_adviser', avatar:'SO', status:'active' },
 ]
 
-export async function signInWithName(name, password) {
-  const n = name.trim(), p = password.trim()
-  const local = LOCAL_USERS.find(u =>
-    u.name.toLowerCase() === n.toLowerCase() && u.password === p && u.status === 'active'
-  )
-  if (local) return local
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTHENTICATION — Supabase Auth (real accounts, server-side verification)
+//
+// Each user has their own email + password held by Supabase Auth. Passwords are
+// never stored in this file or in any table we read from the browser.
+//
+// LEGACY_FALLBACK stays true only until every user has an Auth account; set it
+// to false to disable the old shared-password login entirely.
+// ═══════════════════════════════════════════════════════════════════════════
+const LEGACY_FALLBACK = true
+
+// Staff profile (role, avatar, allocation) lives in portal_users, keyed by
+// auth_id. Auth handles credentials; portal_users handles who they are here.
+async function loadProfile(authUser) {
   try {
-    const { data, error } = await supabase
-      .from('portal_users').select('*').ilike('name', n).eq('status', 'active').single()
-    if (!error && data && data.password === p) return data
+    const { data } = await supabase
+      .from('portal_users').select('*').eq('auth_id', authUser.id).single()
+    if (data) return { ...data, email: authUser.email, authId: authUser.id }
   } catch(e) {}
-  throw new Error('Incorrect name or password.')
+  // Fall back to matching on email
+  try {
+    const { data } = await supabase
+      .from('portal_users').select('*').ilike('email', authUser.email).single()
+    if (data) return { ...data, email: authUser.email, authId: authUser.id }
+  } catch(e) {}
+  return null
 }
 
-export async function signOut() { return true }
-export async function getSession() { return null }
+// Sign in with email + password (Supabase Auth)
+export async function signInWithEmail(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(), password,
+  })
+  if (error) throw new Error(error.message || 'Incorrect email or password.')
+  const profile = await loadProfile(data.user)
+  if (!profile) throw new Error('Your login works, but no staff profile is linked to it. Ask an administrator to link your account.')
+  if (profile.status && profile.status !== 'active') throw new Error('This account is not active.')
+  console.log('[Auth] Signed in:', profile.name, '· role:', profile.role)
+  return profile
+}
+
+// Accepts an email (Supabase Auth) or, during transition, a name (legacy).
+export async function signInWithName(nameOrEmail, password) {
+  const input = nameOrEmail.trim()
+
+  if (input.includes('@')) return signInWithEmail(input, password)
+
+  // Name given — resolve it to an email, then use Auth
+  try {
+    const { data } = await supabase
+      .from('portal_users').select('email').ilike('name', input).single()
+    if (data?.email) {
+      try { return await signInWithEmail(data.email, password) } catch(e) { /* fall through */ }
+    }
+  } catch(e) {}
+
+  if (LEGACY_FALLBACK) {
+    const local = LOCAL_USERS.find(u =>
+      u.name.toLowerCase() === input.toLowerCase() && u.password === password.trim() && u.status === 'active'
+    )
+    if (local) {
+      console.warn('[Auth] Legacy shared-password login used by', local.name, '— migrate this user to Supabase Auth.')
+      return { ...local, legacyLogin: true }
+    }
+  }
+  throw new Error('Incorrect email/name or password.')
+}
+
+export async function signOut() {
+  try { await supabase.auth.signOut() } catch(e) {}
+  return true
+}
+
+// Restore an existing session on page load — users stay signed in on refresh
+export async function getSession() {
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (!data?.session?.user) return null
+    return await loadProfile(data.session.user)
+  } catch(e) { return null }
+}
+
+// Change your own password (requires an active Auth session)
+export async function changePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw new Error(error.message || 'Could not change password.')
+  return true
+}
+
+// Send a password-reset email
+export async function requestPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: window.location.origin,
+  })
+  if (error) throw new Error(error.message || 'Could not send reset email.')
+  return true
+}
 
 // ── EMPLOYERS ─────────────────────────────────────────────────────────────────
 // Primary: Supabase

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   T, CASE_STATUSES, PRIORITIES, genRef,
   STEP_STATUSES, STEP_STATUS_CONFIG,
-  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES,
+  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES, canReassignCase, canEditCase,
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
@@ -12,7 +12,10 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 
   const isInternal = !['employer_admin','employer_user'].includes(currentUser.role)
   const isGM       = currentUser.role === 'general_manager'
-  const canEdit    = isInternal
+  // VIEW ALL, EDIT OWN: any authorised staff member may open this case, but
+  // editing is limited to the assignee, the creator, or admin/management.
+  const canEdit    = isInternal && canEditCase(currentUser, c)
+  const viewOnly   = isInternal && !canEdit
 
   const assignedUser = users.find(u => u.id === c.assignedTo)
   const employer     = employers.find(e => e.id === c.employerId)
@@ -94,6 +97,12 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
           {/* ── OVERVIEW ── */}
           {tab === 'Overview' && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              {viewOnly && (
+                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#1e40af', lineHeight:1.6 }}>
+                  <strong>View only.</strong> This case is assigned to {assignedUser?.name || 'someone else'}. You can see its
+                  status, workflow and history. To work on it, assign it to yourself using the Assigned To field below.
+                </div>
+              )}
               {/* Receive Notification: member financial position for review cases */}
               {['Member Review','Benefit Update'].includes(c.caseTypeName) && (
                 <MemberPosition c={c} members={members} currentUser={currentUser} onUpdate={onUpdate}/>
@@ -119,7 +128,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
                 {/* Assigned To — with reassignment for managers/administrators */}
                 <div>
                   <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>Assigned To</div>
-                  {['general_manager','administrator'].includes(currentUser.role) ? (
+                  {canReassignCase(currentUser, c) ? (
                     <select
                       value={c.assignedTo || ''}
                       onChange={e => {
@@ -139,11 +148,28 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
                       style={{ ...inputSt, padding:'6px 10px', fontSize:13, fontWeight:600 }}>
                       <option value="">Unassigned</option>
                       {users.filter(u => !['employer_admin','employer_user'].includes(u.role) && u.status==='active').map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                        <option key={u.id} value={u.id}>{u.name}{u.id===currentUser.id?' (me)':''}</option>
                       ))}
                     </select>
                   ) : (
                     <div style={{ fontSize:13, fontWeight:500, color:T.text }}>{assignedUser?.name || 'Unassigned'}</div>
+                  )}
+                  {canReassignCase(currentUser, c) && c.assignedTo !== currentUser.id && (
+                    <button onClick={() => {
+                        const prev = users.find(u => u.id === c.assignedTo)
+                        onUpdate({
+                          ...c,
+                          assignedTo: currentUser.id,
+                          ownerHistory: [...(c.ownerHistory||[]), { user:currentUser.id, from:new Date().toISOString().split('T')[0] }],
+                          audit: [...(c.audit||[]), {
+                            time: new Date().toISOString(), user: currentUser.id, type:'assign',
+                            action: `Case self-assigned: ${prev?.name || 'Unassigned'} → ${currentUser.name}`,
+                          }],
+                        })
+                      }}
+                      style={{ marginTop:6, fontSize:11, fontWeight:700, color:T.blue, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+                      Assign to me
+                    </button>
                   )}
                 </div>
               </div>
@@ -400,7 +426,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab, onLaunchConsultation, onLaunchJourney }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
-  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
+  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role) && canEditCase(currentUser, c)
 
   const workflow = c.workflow || initWorkflow(c.caseTypeName)
   if (!workflow) {
@@ -623,7 +649,7 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setT
                   )}
 
                   {/* Allocation control — rendered on any "Allocate" step */}
-                  {canEdit && /allocat/i.test(s.name) && (
+                  {canReassignCase(currentUser, c) && /allocat/i.test(s.name) && (
                     <div style={{ marginBottom:12, background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:9, padding:'11px 14px' }}>
                       <label style={{ fontSize:11, fontWeight:700, color:T.navy, display:'block', marginBottom:6 }}>Allocate this case to</label>
                       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>

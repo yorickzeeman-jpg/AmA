@@ -35,7 +35,7 @@ const ROLE_COLORS = {
   employer_user:  '#0891b2',
 }
 
-export default function Sidebar({ user, page, onNav, onLogout, open }) {
+export default function Sidebar({ user, page, onNav, onLogout, onChangePassword, open }) {
   const isEmployer = ['employer_admin','employer_user'].includes(user.role)
   const isGM       = user.role === 'general_manager'
   const isBilling  = user.role === 'billing_admin'
@@ -100,6 +100,11 @@ export default function Sidebar({ user, page, onNav, onLogout, open }) {
             </div>
           )}
         </div>
+        {onChangePassword && (
+          <button onClick={onChangePassword} style={{ display:'flex', alignItems:'center', gap:9, width:'100%', padding:'7px 8px', borderRadius:7, background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', fontFamily:'inherit', fontSize:12 }}>
+            Change password
+          </button>
+        )}
         <button onClick={onLogout} style={{ display:'flex', alignItems:'center', gap:9, width:'100%', padding:'7px 8px', borderRadius:7, background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', fontFamily:'inherit' }}>
           <Icon name="logout" size={14} color="rgba(255,255,255,0.35)" />
           {open && <span style={{ fontSize:11 }}>Sign out</span>}

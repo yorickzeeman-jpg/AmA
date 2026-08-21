@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { INITIAL_USERS, INITIAL_EMPLOYERS, INITIAL_CASE_TYPES, INITIAL_CASES, INITIAL_CATEGORIES, INITIAL_BILLING_TASKS, INITIAL_BENEFIT_PROFILES, T, genRef, WORKFLOW_TEMPLATES } from './data.js'
-import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile, fetchCases, saveCase } from './supabase.js'
+import { fetchEmployers, saveEmployer, fetchBenefitProfiles, saveBenefitProfile, fetchCases, saveCase, getSession, signOut, changePassword} from './supabase.js'
 import { Icon } from './ui.jsx'
 import Sidebar from './Sidebar.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -74,6 +74,17 @@ import PWAInstallPrompt from './PWAInstallPrompt.jsx'
 
 export default function App() {
   const [user, setUser]               = useState(null)
+  const [authChecking, setAuthCheck]  = useState(true)
+  const [showChangePw, setShowChangePw] = useState(false)
+
+  // Restore an existing Supabase Auth session so a refresh doesn't sign you out
+  useEffect(() => {
+    let cancelled = false
+    getSession()
+      .then(profile => { if (!cancelled && profile) setUser(profile) })
+      .finally(() => { if (!cancelled) setAuthCheck(false) })
+    return () => { cancelled = true }
+  }, [])
   const [page, setPage]               = useState('dashboard')
   const [pageFilter, setPageFilter]   = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -138,6 +149,12 @@ export default function App() {
     }
     load()
   }, [user?.id])
+
+  if (authChecking) return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#0b1220', color:'rgba(255,255,255,0.6)', fontSize:13 }}>
+      Checking your session…
+    </div>
+  )
 
   if (!user) return (
     <>
@@ -223,7 +240,10 @@ export default function App() {
 
   return (
     <div style={{ display:'flex', height:'100vh', background:'#f4f5f7', fontFamily:"'Inter',-apple-system,sans-serif" }}>
-      <Sidebar user={user} page={page} open={sidebarOpen} onNav={navigate} onLogout={()=>setUser(null)}/>
+      {showChangePw && (
+        <ChangePasswordModal user={user} onClose={()=>setShowChangePw(false)}/>
+      )}
+      <Sidebar user={user} page={page} open={sidebarOpen} onNav={navigate} onChangePassword={()=>setShowChangePw(true)} onLogout={async ()=>{ await signOut(); setUser(null) }}/>
 
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
         {/* Topbar */}
@@ -530,6 +550,53 @@ function AllocationAdmin({ users }) {
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+// ─── CHANGE PASSWORD ─────────────────────────────────────────────────────────
+function ChangePasswordModal({ user, onClose }) {
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    if (pw1.length < 8)  { setMsg('Use at least 8 characters.'); return }
+    if (pw1 !== pw2)     { setMsg('The two passwords do not match.'); return }
+    setBusy(true); setMsg('')
+    try { await changePassword(pw1); setMsg('✓ Password changed.'); setTimeout(onClose, 1200) }
+    catch(e) { setMsg(e.message) }
+    setBusy(false)
+  }
+
+  const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:14, fontFamily:'inherit', boxSizing:'border-box', marginBottom:10 }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:800, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'#fff', borderRadius:14, padding:'22px 24px', width:'min(400px,100%)' }}>
+        <div style={{ fontSize:17, fontWeight:800, marginBottom:4 }}>Change your password</div>
+        <div style={{ fontSize:12, color:'#6b7280', marginBottom:16 }}>
+          {user?.legacyLogin
+            ? 'You signed in with the shared password. Set your own password now.'
+            : `Signed in as ${user?.email || user?.name}.`}
+        </div>
+        <input type="password" value={pw1} onChange={e=>setPw1(e.target.value)} placeholder="New password (min 8 characters)" style={inp} autoComplete="new-password"/>
+        <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Confirm new password" style={inp} autoComplete="new-password"
+               onKeyDown={e=>e.key==='Enter'&&submit()}/>
+        {msg && <div style={{ fontSize:12, color: msg.startsWith('✓') ? '#059669' : '#dc2626', marginBottom:10 }}>{msg}</div>}
+        {user?.legacyLogin && (
+          <div style={{ fontSize:11, color:'#c2410c', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:8, padding:'8px 11px', marginBottom:12 }}>
+            Legacy sign-in has no Auth session, so this must be done by an administrator creating your account first.
+          </div>
+        )}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:8, border:'1px solid #e5e7eb', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+          <button onClick={submit} disabled={busy} style={{ padding:'9px 18px', borderRadius:8, border:'none', background:'#1e3a5f', color:'#fff', fontSize:13, fontWeight:700, cursor:busy?'wait':'pointer', fontFamily:'inherit' }}>
+            {busy ? 'Saving…' : 'Change password'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
