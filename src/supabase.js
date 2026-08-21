@@ -46,17 +46,22 @@ const LEGACY_FALLBACK = true
 // Staff profile (role, avatar, allocation) lives in portal_users, keyed by
 // auth_id. Auth handles credentials; portal_users handles who they are here.
 async function loadProfile(authUser) {
+  // maybeSingle() returns null for zero rows. single() raises PostgREST 406,
+  // which is what filled the console while email/auth_id were still NULL.
   try {
     const { data } = await supabase
-      .from('portal_users').select('*').eq('auth_id', authUser.id).single()
+      .from('portal_users').select('*').eq('auth_id', authUser.id).maybeSingle()
     if (data) return { ...data, email: authUser.email, authId: authUser.id }
-  } catch(e) {}
-  // Fall back to matching on email
-  try {
-    const { data } = await supabase
-      .from('portal_users').select('*').ilike('email', authUser.email).single()
-    if (data) return { ...data, email: authUser.email, authId: authUser.id }
-  } catch(e) {}
+  } catch(e) { console.warn('[Auth] profile lookup by auth_id failed:', e.message) }
+
+  // Fall back to matching on email — only if we actually have one
+  if (authUser.email) {
+    try {
+      const { data } = await supabase
+        .from('portal_users').select('*').ilike('email', authUser.email).maybeSingle()
+      if (data) return { ...data, email: authUser.email, authId: authUser.id }
+    } catch(e) { console.warn('[Auth] profile lookup by email failed:', e.message) }
+  }
   return null
 }
 
@@ -79,14 +84,17 @@ export async function signInWithName(nameOrEmail, password) {
 
   if (input.includes('@')) return signInWithEmail(input, password)
 
-  // Name given — resolve it to an email, then use Auth
+  // Name given — try to resolve it to an email, then use Auth.
+  // maybeSingle() + limit(1): a missing or duplicate name must not 406.
   try {
-    const { data } = await supabase
-      .from('portal_users').select('email').ilike('name', input).single()
+    const { data, error } = await supabase
+      .from('portal_users').select('email').ilike('name', input).not('email','is',null)
+      .limit(1).maybeSingle()
+    if (error) console.warn('[Auth] name lookup:', error.message)
     if (data?.email) {
-      try { return await signInWithEmail(data.email, password) } catch(e) { /* fall through */ }
+      try { return await signInWithEmail(data.email, password) } catch(e) { /* fall through to legacy */ }
     }
-  } catch(e) {}
+  } catch(e) { console.warn('[Auth] name lookup failed:', e.message) }
 
   if (LEGACY_FALLBACK) {
     const local = LOCAL_USERS.find(u =>
