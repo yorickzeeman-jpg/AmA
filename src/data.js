@@ -47,6 +47,10 @@ export const ROLE_PERMISSIONS = {
   administrator:    ['cases:read','cases:read:all','cases:write','cases:assign','internal:read','internal:write','reports:read','employers:read'],
   billing_admin:    ['cases:read','cases:read:all','cases:write','cases:assign','billing:read','billing:write'],
   financial_adviser:['cases:read','cases:read:all','cases:write','cases:assign','internal:read','reports:read','employers:read'],
+  // Rustenburg field service — VIEW ONLY. They track claim progress themselves
+  // instead of emailing queries. No editing, no reassignment, no billing.
+  field_service:    ['cases:read','cases:read:all'],
+  field_service_manager: ['cases:read','cases:read:all','reports:read'],
   employer_admin:   ['cases:read:own','cases:create'],
   employer_user:    ['cases:read:own','cases:create'],
 }
@@ -66,7 +70,7 @@ export function canViewAllCases(user) {
 // Viewing another person's case does NOT grant editing it.
 export function canEditCase(user, caseObj) {
   if (!user) return false
-  if (['employer_admin','employer_user'].includes(user.role)) return false
+  if (['employer_admin','employer_user','field_service','field_service_manager'].includes(user.role)) return false
   if (hasPermission(user, 'all')) return true
   if (caseObj?.assignedTo === user.id) return true
   if (caseObj?.createdBy === user.id) return true
@@ -77,6 +81,7 @@ export function canEditCase(user, caseObj) {
 // Round-robin allocation at creation is unaffected by this.
 export function canReassignCase(user, caseObj) {
   if (!user) return false
+  if (['field_service','field_service_manager'].includes(user.role)) return false
   if (hasPermission(user, 'cases:assign')) return true
   // The person who created the case may always take it back to themselves
   if (caseObj?.createdBy && caseObj.createdBy === user.id) return true
@@ -1236,5 +1241,6 @@ export function statsCases(cases = []) {
 
 // Staff who appear in performance statistics / leaderboards
 export function statsUsers(users = []) {
-  return users.filter(u => !STATS_EXCLUDED_USER_IDS.includes(u.id))
+  return users.filter(u => !STATS_EXCLUDED_USER_IDS.includes(u.id)
+    && !['field_service','field_service_manager','employer_admin','employer_user'].includes(u.role))
 }
