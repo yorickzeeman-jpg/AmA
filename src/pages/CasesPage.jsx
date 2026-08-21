@@ -7,7 +7,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Card, Btn, Modal, Field, inputSt, selectSt, Empty } from '../ui.jsx'
 import { CASE_CONFIG, CASE_TYPE_LIST, categoriesForType, findConfig, slaDueDate } from '../caseConfig.js'
-import { fetchFuneralEmployers } from '../supabase.js'
+import { fetchParticipatingEmployers, employerCaseFields } from '../employers.js'
 
 // ─── DOCUMENT UPLOAD ZONE (unchanged from v15) ────────────────────────────────
 const ACCEPTED_TYPES = {
@@ -242,12 +242,13 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
   const [cfgType, setCfgType]      = useState('')   // master Case Type (Excel)
   const [cfgCategory, setCfgCat]   = useState('')   // master Case Category (Excel)
   // Participating employers (AMCU scheme) — available on ANY case type, not just claims
-  const [schemeEmployers, setSchemeEmployers] = useState([])
+  // ONE consolidated participating-employer list across all benefits
+  const [partEmployers, setPartEmployers] = useState([])
   const [peName, setPeName]        = useState('')
   const [peBranch, setPeBranch]    = useState('')
-  useEffect(() => { fetchFuneralEmployers().then(setSchemeEmployers) }, [])
-  const peNames = [...new Set(schemeEmployers.map(r => r.name))].sort()
-  const peBranches = [...new Set(schemeEmployers.filter(r => r.name === peName && r.branch).map(r => r.branch))].sort()
+  useEffect(() => { fetchParticipatingEmployers().then(setPartEmployers) }, [])
+  const peEntry    = partEmployers.find(e => e.name === peName) || null
+  const peBranches = peEntry?.branches || []
   const [attachedFiles, setFiles]  = useState([])
   const [form, setForm] = useState({
     employerId: isEmployer ? currentUser.employer : '',
@@ -263,8 +264,8 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
   const typesInCat   = selectedCategory ? (CASE_TYPES_BY_CATEGORY[selectedCategory] || []) : []
 
   function handleSubmit() {
-    if (!selectedType || !form.employerId || !form.description.trim()) {
-      alert('Please complete all required fields.'); return
+    if (!selectedType || (!peName && !form.employerId) || !form.description.trim()) {
+      alert('Please complete all required fields, including the participating employer.'); return
     }
     const now   = new Date().toISOString()
     const today = now.split('T')[0]
@@ -480,22 +481,25 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
           {/* Two column: fields left, upload right */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             <div>
+              {/* ONE employer field across all benefits — Employee Benefits and
+                  Funeral participating employers merged into a single list */}
               {!isEmployer && (
-                <Field label="Employer *">
-                  <select value={form.employerId} onChange={e=>set('employerId',e.target.value)} style={selectSt}>
-                    <option value="">Select employer</option>
-                    {employers.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
-                  </select>
-                </Field>
-              )}
-              {/* Participating employer — available on EVERY case type, so weekly
-                  stats can be broken down per PE (not just funeral claims) */}
-              {!isEmployer && peNames.length > 0 && (
                 <>
-                  <Field label="Participating Employer">
-                    <select value={peName} onChange={e=>{ setPeName(e.target.value); setPeBranch('') }} style={selectSt}>
-                      <option value="">Not applicable</option>
-                      {peNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  <Field label="Participating Employer *">
+                    <select value={peName}
+                      onChange={e=>{
+                        const name = e.target.value
+                        setPeName(name); setPeBranch('')
+                        const entry = partEmployers.find(x => x.name === name)
+                        set('employerId', entry?.employerId || '')   // preserves benefit-profile link
+                      }}
+                      style={selectSt}>
+                      <option value="">Select participating employer</option>
+                      {partEmployers.map(e => (
+                        <option key={e.key} value={e.name}>
+                          {e.name}{e.sources.length===1 && e.sources[0]==='Funeral' ? '  (Funeral)' : ''}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                   {peName && peBranches.length > 0 && (
@@ -505,6 +509,11 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
                         {peBranches.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
                     </Field>
+                  )}
+                  {peEntry && !peEntry.employerId && (
+                    <div style={{ fontSize:11, color:'#92400e', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, padding:'7px 10px', marginTop:-6, marginBottom:10 }}>
+                      Funeral-scheme employer — no Employee Benefits profile is linked, so benefit structures won't load for this case.
+                    </div>
                   )}
                 </>
               )}
@@ -597,10 +606,10 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
   const [employerId, setEmployerId] = useState('')
   const [bulkPe, setBulkPe]         = useState('')
   const [bulkBranch, setBulkBranch] = useState('')
-  const [schemeEmps, setSchemeEmps] = useState([])
-  useEffect(() => { fetchFuneralEmployers().then(setSchemeEmps) }, [])
-  const bulkPeNames = [...new Set(schemeEmps.map(r => r.name))].sort()
-  const bulkBranches = [...new Set(schemeEmps.filter(r => r.name === bulkPe && r.branch).map(r => r.branch))].sort()
+  const [partEmps, setPartEmps]     = useState([])
+  useEffect(() => { fetchParticipatingEmployers().then(setPartEmps) }, [])
+  const bulkEntry    = partEmps.find(e => e.name === bulkPe) || null
+  const bulkBranches = bulkEntry?.branches || []
   const [raw, setRaw]               = useState('')
   const [caseType, setCaseType]     = useState('Member Review')
   const [preview, setPreview]       = useState(null)
@@ -620,7 +629,7 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
   }
 
   function buildPreview() {
-    if (!employerId) { alert('Select an employer first.'); return }
+    if (!bulkPe) { alert('Select a participating employer first.'); return }
     const rows = parseRows(raw)
     if (!rows.length) { alert('No member rows found. Paste one member per line.'); return }
     // Round-robin across the general pool, continuing from current workload
@@ -643,7 +652,7 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
 
     const today = new Date().toISOString().split('T')[0]
     const now   = new Date().toISOString()
-    const emp   = employers.find(e => e.id === employerId)
+    const emp   = { name: bulkPe }
 
     const list = valid.map(r => {
       const ref = genRef('AEB')
@@ -689,10 +698,16 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
       {!preview ? (
         <div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
-            <Field label="Employer" required>
-              <select value={employerId} onChange={e=>setEmployerId(e.target.value)} style={selectSt}>
-                <option value="">Select employer…</option>
-                {employers.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+            <Field label="Participating Employer" required>
+              <select value={bulkPe}
+                onChange={e=>{
+                  const name=e.target.value
+                  setBulkPe(name); setBulkBranch('')
+                  setEmployerId(partEmps.find(x=>x.name===name)?.employerId || '')
+                }}
+                style={selectSt}>
+                <option value="">Select participating employer…</option>
+                {partEmps.map(e=><option key={e.key} value={e.name}>{e.name}{e.sources.length===1&&e.sources[0]==='Funeral'?'  (Funeral)':''}</option>)}
               </select>
             </Field>
             <Field label="Case Type">
@@ -701,14 +716,6 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
                 <option>Benefit Update</option>
               </select>
             </Field>
-            {bulkPeNames.length > 0 && (
-              <Field label="Participating Employer">
-                <select value={bulkPe} onChange={e=>{ setBulkPe(e.target.value); setBulkBranch('') }} style={selectSt}>
-                  <option value="">Not applicable</option>
-                  {bulkPeNames.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </Field>
-            )}
             {bulkPe && bulkBranches.length > 0 && (
               <Field label="Branch">
                 <select value={bulkBranch} onChange={e=>setBulkBranch(e.target.value)} style={selectSt}>

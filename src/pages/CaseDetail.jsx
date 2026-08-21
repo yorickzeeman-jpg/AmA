@@ -110,7 +110,8 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
               {/* Meta grid */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
                 {[
-                  ['Employer',    employer?.name || '—'],
+                  ['Participating Employer', c.extraFields?.participating_employer || employer?.name || '—'],
+                  ...(c.extraFields?.branch ? [['Branch', c.extraFields.branch]] : []),
                   ['SLA Due',     c.slaDate],
                   ['Created',     c.created],
                   ['Member',      c.memberName || '—'],
