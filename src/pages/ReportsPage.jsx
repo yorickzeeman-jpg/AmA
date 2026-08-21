@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { T, slaStatus, statsCases, statsUsers } from '../data.js'
+import { T, slaStatus } from '../data.js'
 import { BarRow, Card, CardHead, KPI } from '../ui.jsx'
 
 const RANGES = [
@@ -13,13 +13,9 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
 
   // Date-range filter on case creation date
   const cutoff = RANGES.find(r=>r.id===range)?.days
-  // Operational dataset (all cases) — used for volume/export
-  // Statistics dataset excludes cases assigned to Yorick
   const cases  = cutoff
     ? allCases.filter(c => c.created && (Date.now() - new Date(c.created)) <= cutoff*86400000)
     : allCases
-
-  const perfCases = statsCases(cases)   // performance statistics only
 
   // ── CSV EXPORT — full admin dataset for the selected range ──────────────
   function exportCSV() {
@@ -59,13 +55,11 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
     a.click()
     URL.revokeObjectURL(url)
   }
-  // Volume is operational (every case counts); completion and SLA are
-  // PERFORMANCE metrics, so they exclude cases assigned to Yorick.
   const total     = cases.length
-  const completed = perfCases.filter(c => c.status==='Closed').length
-  const overdue   = perfCases.filter(c => slaStatus(c.slaDate,c.status)==='overdue').length
-  const withinSla = perfCases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) }).length
-  const slaPct    = perfCases.length ? Math.round((withinSla/perfCases.length)*100) : 100
+  const completed = cases.filter(c => c.status==='Closed').length
+  const overdue   = cases.filter(c => slaStatus(c.slaDate,c.status)==='overdue').length
+  const withinSla = cases.filter(c => { const s=slaStatus(c.slaDate,c.status); return ['ok','warning','today','done'].includes(s) }).length
+  const slaPct    = total ? Math.round((withinSla/total)*100) : 100
 
   // Category summary (grouping only — no business logic)
   const byCat = categories.map(cat => {
@@ -76,7 +70,7 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
 
   // Case Type detail — the primary reporting unit
   const byCaseType = caseTypes.map(ct => {
-    const ctCases     = perfCases.filter(c => c.caseTypeId===ct.id || c.caseTypeName===ct.name)
+    const ctCases     = cases.filter(c => c.caseTypeId===ct.id || c.caseTypeName===ct.name)
     const ctOpen      = ctCases.filter(c => !['Completed','Closed'].includes(c.status))
     const ctCompleted = ctCases.filter(c => c.status==='Closed')
     const ctOverdue   = ctCases.filter(c => slaStatus(c.slaDate,c.status)==='overdue')
@@ -99,13 +93,13 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
     completed: cases.filter(c => c.employerId===emp.id && c.status==='Closed').length,
   })).sort((a,b) => b.total-a.total)
 
-  const consultants  = statsUsers(users).filter(u => !['employer_admin','employer_user'].includes(u.role))
+  const consultants  = users.filter(u => ['consultant','claims_admin','service_admin'].includes(u.role))
   const byConsultant = consultants.map(u => ({
     ...u,
-    allocated: perfCases.filter(c => c.assignedTo===u.id).length,
-    completed: perfCases.filter(c => c.assignedTo===u.id && c.status==='Closed').length,
-    open:      perfCases.filter(c => c.assignedTo===u.id && !['Completed','Closed'].includes(c.status)).length,
-    escalated: perfCases.filter(c => c.assignedTo===u.id && c.escalated).length,
+    allocated: cases.filter(c => c.assignedTo===u.id).length,
+    completed: cases.filter(c => c.assignedTo===u.id && c.status==='Closed').length,
+    open:      cases.filter(c => c.assignedTo===u.id && !['Completed','Closed'].includes(c.status)).length,
+    escalated: cases.filter(c => c.assignedTo===u.id && c.escalated).length,
   }))
 
   const maxCat = Math.max(...byCat.map(c => c.count), 1)
@@ -216,10 +210,10 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
 
         {/* Funeral Claims by Participating Employer */}
         <Card>
-          <CardHead title="Cases by Participating Employer" />
+          <CardHead title="Funeral Claims by Participating Employer" />
           <div style={{ padding:'14px 18px' }}>
             {funeralByEmployer.length === 0 ? (
-              <div style={{ fontSize:12, color:T.gray, textAlign:'center', padding:'12px 0' }}>No cases with a participating employer yet.</div>
+              <div style={{ fontSize:12, color:T.gray, textAlign:'center', padding:'12px 0' }}>No funeral claims registered yet.</div>
             ) : (
               <>
                 {funeralByEmployer.map(emp => (

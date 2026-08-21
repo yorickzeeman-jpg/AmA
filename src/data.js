@@ -39,18 +39,11 @@ export const ROLES = [
   { id: 'employer_user',    label: 'Employer User',         color: T.teal    },
 ]
 
-// cases:read:all  → may VIEW every case (cover for leave, client queries)
-// cases:write      → may EDIT cases (own by default; see canEditCase)
-// cases:assign     → may reassign cases to anyone
 export const ROLE_PERMISSIONS = {
   general_manager:  ['all'],
-  administrator:    ['cases:read','cases:read:all','cases:write','cases:assign','internal:read','internal:write','reports:read','employers:read'],
-  billing_admin:    ['cases:read','cases:read:all','cases:write','cases:assign','billing:read','billing:write'],
-  financial_adviser:['cases:read','cases:read:all','cases:write','cases:assign','internal:read','reports:read','employers:read'],
-  // Rustenburg field service — VIEW ONLY. They track claim progress themselves
-  // instead of emailing queries. No editing, no reassignment, no billing.
-  field_service:    ['cases:read','cases:read:all'],
-  field_service_manager: ['cases:read','cases:read:all','reports:read'],
+  administrator:    ['cases:read','cases:write','cases:assign','internal:read','internal:write','reports:read','employers:read'],
+  billing_admin:    ['cases:read','cases:write','cases:assign','billing:read','billing:write'],
+  financial_adviser:['cases:read','cases:write','cases:assign','internal:read','reports:read','employers:read'],
   employer_admin:   ['cases:read:own','cases:create'],
   employer_user:    ['cases:read:own','cases:create'],
 }
@@ -61,27 +54,10 @@ export function hasPermission(user, permission) {
   return perms.includes('all') || perms.includes(permission)
 }
 
-// VIEW rights — authorised staff may view every case
-export function canViewAllCases(user) {
-  return hasPermission(user, 'cases:read:all')
-}
-
-// EDIT rights — a case you own, or full rights for admins/management.
-// Viewing another person's case does NOT grant editing it.
-export function canEditCase(user, caseObj) {
-  if (!user) return false
-  if (['employer_admin','employer_user','field_service','field_service_manager'].includes(user.role)) return false
-  if (hasPermission(user, 'all')) return true
-  if (caseObj?.assignedTo === user.id) return true
-  if (caseObj?.createdBy === user.id) return true
-  return false
-}
-
 // Manual reassignment rights on a specific case.
 // Round-robin allocation at creation is unaffected by this.
 export function canReassignCase(user, caseObj) {
   if (!user) return false
-  if (['field_service','field_service_manager'].includes(user.role)) return false
   if (hasPermission(user, 'cases:assign')) return true
   // The person who created the case may always take it back to themselves
   if (caseObj?.createdBy && caseObj.createdBy === user.id) return true
@@ -120,11 +96,11 @@ export const INITIAL_USERS = [
 export const ALLOCATION_POOLS = {
   general: {
     name: 'General Administration Pool',
-    // Round-robin rotates between these three only.
     members: [
-      'a0000000-0000-0000-0000-000000000007',  // Mahlatse Manyathi
-      'a0000000-0000-0000-0000-000000000005',  // Sesi Phiri
-      'a0000000-0000-0000-0000-000000000003',  // Nokulunga Nyundu
+      'a0000000-0000-0000-0000-000000000003',  // Nokulunga
+      'a0000000-0000-0000-0000-000000000004',  // Tevin
+      'a0000000-0000-0000-0000-000000000007',  // Mahlatse
+      'a0000000-0000-0000-0000-000000000009',  // Cynthia
     ],
     strategy: 'round_robin',
     currentIndex: 0,
@@ -1208,39 +1184,4 @@ export function emptyBenefitProfile(employerId, employerName) {
     medicalAid:     { scheme:'', schemeNumber:'', billingMethod:'Arrears', billingDueDate:'14th', paymentMethod:'Debit Order', compulsory:false },
     funeralCover:   null,
   }
-}
-
-
-// Round-robin allocation pool for general case creation — Mahlatse, Sesi,
-// Nokulunga. Manual reassignment afterwards does NOT change this rotation.
-export const ROUND_ROBIN_MEMBER_IDS = [
-  'a0000000-0000-0000-0000-000000000007',  // Mahlatse Manyathi
-  'a0000000-0000-0000-0000-000000000005',  // Sesi Phiri
-  'a0000000-0000-0000-0000-000000000003',  // Nokulunga Nyundu
-]
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// STATISTICS ELIGIBILITY
-// Cases assigned to Yorick are excluded from ALL staff performance statistics,
-// regardless of case type or origin. They remain fully normal operational
-// cases: visible, searchable, workflowed, SLA-tracked and reassignable.
-// ═══════════════════════════════════════════════════════════════════════════
-export const STATS_EXCLUDED_USER_IDS = [
-  'a0000000-0000-0000-0000-000000000001',  // Yorick Zeeman
-]
-
-export function isStatsEligible(caseObj) {
-  return !STATS_EXCLUDED_USER_IDS.includes(caseObj?.assignedTo)
-}
-
-// Apply to any case list before calculating performance statistics
-export function statsCases(cases = []) {
-  return cases.filter(isStatsEligible)
-}
-
-// Staff who appear in performance statistics / leaderboards
-export function statsUsers(users = []) {
-  return users.filter(u => !STATS_EXCLUDED_USER_IDS.includes(u.id)
-    && !['field_service','field_service_manager','employer_admin','employer_user'].includes(u.role))
 }

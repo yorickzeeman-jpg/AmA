@@ -236,8 +236,7 @@ export default function App() {
     setBillingTasks(prev => [enriched, ...prev])
   }
 
-  const sharedProps = { cases, billingTasks, caseTypes, categories, employers, users, members, currentUser:user,
-    onLoadMembers: newMembers => setMembers(prev => [...prev.filter(m => !newMembers.find(n=>n.id===m.id)), ...newMembers]) }
+  const sharedProps = { cases, billingTasks, caseTypes, categories, employers, users, currentUser:user }
 
   return (
     <div style={{ display:'flex', height:'100vh', background:'#f4f5f7', fontFamily:"'Inter',-apple-system,sans-serif" }}>
