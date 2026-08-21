@@ -1,4 +1,4 @@
-import { T, INITIAL_CATEGORIES, slaStatus, canViewAllCases } from '../data.js'
+import { T, INITIAL_CATEGORIES, slaStatus, canViewAllCases, statsCases, statsUsers } from '../data.js'
 import { KPI, BarRow, Card, CardHead, StatusBadge, SLAChip, Icon, Empty } from '../ui.jsx'
 
 function calcHealthScore(open, overdue, billingPending, escalated) {
@@ -37,9 +37,11 @@ export default function DashboardPage({ cases, billingTasks=[], caseTypes, categ
   const closed   = myCases.filter(c => ['Completed','Closed'].includes(c.status))
 
   // Workload per team member (GM view)
-  const staffWorkload = users.filter(u => ['administrator','billing_admin'].includes(u.role)).map(u => ({
+  // Team Workload is a performance panel — excludes Yorick and his cases
+  const perfCases = statsCases(cases)
+  const staffWorkload = statsUsers(users).filter(u => ['administrator','billing_admin','financial_adviser'].includes(u.role)).map(u => ({
     ...u,
-    open: cases.filter(c => c.assignedTo === u.id && !['Completed','Closed','Billing Complete'].includes(c.status)).length,
+    open: perfCases.filter(c => c.assignedTo === u.id && !['Completed','Closed','Billing Complete'].includes(c.status)).length,
   }))
 
   // Category breakdown — match by caseTypeId OR caseTypeName, because cases

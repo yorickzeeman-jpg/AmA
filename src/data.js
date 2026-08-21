@@ -1213,3 +1213,28 @@ export const ROUND_ROBIN_MEMBER_IDS = [
   'a0000000-0000-0000-0000-000000000005',  // Sesi Phiri
   'a0000000-0000-0000-0000-000000000003',  // Nokulunga Nyundu
 ]
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATISTICS ELIGIBILITY
+// Cases assigned to Yorick are excluded from ALL staff performance statistics,
+// regardless of case type or origin. They remain fully normal operational
+// cases: visible, searchable, workflowed, SLA-tracked and reassignable.
+// ═══════════════════════════════════════════════════════════════════════════
+export const STATS_EXCLUDED_USER_IDS = [
+  'a0000000-0000-0000-0000-000000000001',  // Yorick Zeeman
+]
+
+export function isStatsEligible(caseObj) {
+  return !STATS_EXCLUDED_USER_IDS.includes(caseObj?.assignedTo)
+}
+
+// Apply to any case list before calculating performance statistics
+export function statsCases(cases = []) {
+  return cases.filter(isStatsEligible)
+}
+
+// Staff who appear in performance statistics / leaderboards
+export function statsUsers(users = []) {
+  return users.filter(u => !STATS_EXCLUDED_USER_IDS.includes(u.id))
+}
