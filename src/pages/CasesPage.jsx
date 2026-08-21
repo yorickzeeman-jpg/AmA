@@ -93,6 +93,7 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
   const [search, setSearch]   = useState('')
   const [f, setF]             = useState({ status:'', priority:'', category:'', employer:'', assignee:'', overdue:false, ...initialFilter })
   const [showNew, setShowNew] = useState(false)
+  const [showBulk, setShowBulk] = useState(false)
   const setFF = (k,v) => setF(x=>({...x,[k]:v}))
   const hasFilter = f.status||f.priority||f.category||f.employer||f.assignee||f.overdue
 
@@ -120,6 +121,12 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
           {workspace==='internal' ? 'Internal Cases' : isEmployer ? 'My Cases' : 'Employer Cases'}
         </h1>
         <Btn onClick={()=>setShowNew(true)}><Icon name="plus" size={15} color="#fff"/> New Case</Btn>
+        {!isEmployer && (
+          <button onClick={()=>setShowBulk(true)}
+            style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'9px 16px', borderRadius:9, border:`1px solid ${T.border}`, background:'#fff', color:T.text, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginLeft:8 }}>
+            ⇪ Bulk Member Review
+          </button>
+        )}
       </div>
 
       {/* Filter bar */}
@@ -205,6 +212,13 @@ export default function CasesPage({ cases, caseTypes, categories, employers, use
         </div>
       </Card>
 
+      {showBulk && (
+        <BulkMemberReviewModal
+          employers={employers} users={users} cases={cases} currentUser={currentUser}
+          onClose={()=>setShowBulk(false)}
+          onSubmitAll={list=>{ list.forEach(onAddCase); setShowBulk(false) }}
+        />
+      )}
       {showNew && (
         <NewCaseModal
           employers={employers} users={users} cases={cases}
@@ -537,6 +551,181 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
             <Btn onClick={handleSubmit}>
               Submit Case{attachedFiles.length>0?` with ${attachedFiles.length} document${attachedFiles.length!==1?'s':''}` : ''}
             </Btn>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// ─── BULK MEMBER REVIEW ──────────────────────────────────────────────────────
+// Creates one Member Review case per member. Reuses the existing case shape,
+// workflow template, SLA config and round-robin pool — nothing duplicated.
+function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onClose, onSubmitAll }) {
+  const [employerId, setEmployerId] = useState('')
+  const [raw, setRaw]               = useState('')
+  const [caseType, setCaseType]     = useState('Member Review')
+  const [preview, setPreview]       = useState(null)
+  const fileRef = useRef()
+
+  const cfg = findConfig(caseType === 'Member Review' ? 'Member Review' : 'Benefit Update', 'Member Review')
+
+  function parseRows(text) {
+    return text.split('\n').map(l => l.trim()).filter(Boolean).map((line, i) => {
+      const p = line.split(/\t|,|;/).map(x => x.trim().replace(/^["']|["']$/g, ''))
+      const [name, idNumber, phone, email] = p
+      const errors = []
+      if (!name) errors.push('name missing')
+      if (idNumber && !/^\d{13}$/.test(idNumber.replace(/\s/g,''))) errors.push('ID must be 13 digits')
+      return { row:i+1, name, idNumber:(idNumber||'').replace(/\s/g,''), phone:phone||'', email:email||'', errors }
+    }).filter(r => r.name && r.name.toLowerCase() !== 'name' && !/member\s*name/i.test(r.name))
+  }
+
+  function buildPreview() {
+    if (!employerId) { alert('Select an employer first.'); return }
+    const rows = parseRows(raw)
+    if (!rows.length) { alert('No member rows found. Paste one member per line.'); return }
+    // Round-robin across the general pool, continuing from current workload
+    const pool = ROUND_ROBIN_MEMBER_IDS
+      .map(id => users.find(u => u.id === id && u.status === 'active'))
+      .filter(Boolean)
+    const counts = Object.fromEntries(pool.map(u => [u.id, cases.filter(c => c.assignedTo===u.id && c.status!=='Closed').length]))
+    const assigned = rows.map(r => {
+      const next = [...pool].sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0))[0]
+      if (next) counts[next.id] = (counts[next.id]||0) + 1
+      return { ...r, assignedTo: next?.id || '', assignedName: next?.name || 'Unassigned' }
+    })
+    setPreview(assigned)
+  }
+
+  function createAll() {
+    const valid = preview.filter(r => r.errors.length === 0)
+    if (!valid.length) { alert('No valid rows to create.'); return }
+    if (!window.confirm(`Create ${valid.length} ${caseType} case${valid.length!==1?'s':''}?`)) return
+
+    const today = new Date().toISOString().split('T')[0]
+    const now   = new Date().toISOString()
+    const emp   = employers.find(e => e.id === employerId)
+
+    const list = valid.map(r => {
+      const ref = genRef('AEB')
+      return {
+        id: crypto.randomUUID(), ref, workspace:'employer',
+        caseTypeName:     caseType,
+        workflowCategory: 'New Business',
+        masterCaseType:   caseType,
+        caseCategory:     'Member Review',
+        employerId,
+        status:'Submitted', priority:'Medium',
+        assignedTo: r.assignedTo, createdBy: currentUser.id,
+        memberName: r.name, memberId: r.idNumber || null,
+        memberPhone: r.phone || null, memberEmail: r.email || null,
+        currentStage:0, stageHistory:[],
+        created: today,
+        slaDate: slaDueDate(today, cfg?.slaDays || 5),
+        slaDays: cfg?.slaDays || 5,
+        description: `${caseType} — bulk upload for ${emp?.name || 'employer'}`,
+        extraFields:{}, billingTaskId:null,
+        workflow: initWorkflow(caseType),
+        notes:[], documents:[],
+        audit:[
+          { time:now, user:currentUser.id, action:`Case ${ref} created via bulk ${caseType} upload`, type:'create' },
+          { time:now, user:'system', action:`Leandre AI: workflow attached, allocated to ${r.assignedName} (round robin), SLA ${cfg?.slaDays||5} days`, type:'workflow' },
+        ],
+        escalated:false,
+        ownerHistory: r.assignedTo ? [{ user:r.assignedTo, from:today }] : [],
+      }
+    })
+    onSubmitAll(list)
+  }
+
+  const validCount = preview ? preview.filter(r=>!r.errors.length).length : 0
+  const errCount   = preview ? preview.length - validCount : 0
+
+  return (
+    <Modal title="Bulk Member Review Upload" onClose={onClose} wide>
+      {!preview ? (
+        <div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+            <Field label="Employer" required>
+              <select value={employerId} onChange={e=>setEmployerId(e.target.value)} style={selectSt}>
+                <option value="">Select employer…</option>
+                {employers.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Case Type">
+              <select value={caseType} onChange={e=>setCaseType(e.target.value)} style={selectSt}>
+                <option>Member Review</option>
+                <option>Benefit Update</option>
+              </select>
+            </Field>
+          </div>
+
+          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:9, padding:'11px 14px', marginBottom:12, fontSize:12, color:'#1e40af', lineHeight:1.6 }}>
+            One member per line: <strong>Name, ID Number, Mobile, Email</strong> — ID, mobile and email optional.
+            Copy straight from Excel. Each member gets their own case, allocated round-robin.
+          </div>
+
+          <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:'none'}}
+            onChange={e=>{ const f=e.target.files?.[0]; if(!f) return
+              const rd=new FileReader(); rd.onload=ev=>setRaw(String(ev.target.result)); rd.readAsText(f); e.target.value='' }}/>
+          <button onClick={()=>fileRef.current?.click()}
+            style={{ marginBottom:10, padding:'7px 14px', borderRadius:8, border:`1px dashed ${T.border}`, background:'#fff', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', color:T.blue }}>
+            ⇪ Upload CSV instead
+          </button>
+
+          <textarea value={raw} onChange={e=>setRaw(e.target.value)}
+            style={{ ...inputSt, minHeight:170, resize:'vertical', fontFamily:'monospace', fontSize:12 }}
+            placeholder={"Thabo Molefe, 8501015800083, 0821234567, thabo@example.com\nNomsa Dlamini, 9203125800081\nPieter van Wyk"}/>
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14 }}>
+            <span style={{ fontSize:12, color:T.gray }}>{raw.split('\n').filter(l=>l.trim()).length} line(s)</span>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:8, border:`1px solid ${T.border}`, background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+              <button onClick={buildPreview} style={{ padding:'9px 20px', borderRadius:8, border:'none', background:T.orange, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Preview →</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display:'flex', gap:10, marginBottom:12, flexWrap:'wrap' }}>
+            <span style={{ fontSize:12, fontWeight:700, color:'#059669', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:20, padding:'4px 12px' }}>{validCount} ready</span>
+            {errCount>0 && <span style={{ fontSize:12, fontWeight:700, color:'#dc2626', background:'#fff1f2', border:'1px solid #fecaca', borderRadius:20, padding:'4px 12px' }}>{errCount} with errors — will be skipped</span>}
+            <span style={{ fontSize:12, color:T.gray, alignSelf:'center' }}>SLA {cfg?.slaDays||5} days each</span>
+          </div>
+
+          <div style={{ maxHeight:320, overflowY:'auto', border:`1px solid ${T.border}`, borderRadius:9 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+              <thead><tr style={{ background:'#f9fafb', position:'sticky', top:0 }}>
+                {['#','Member','ID Number','Contact','Allocated To','Status'].map(h=>(
+                  <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {preview.map(r=>(
+                  <tr key={r.row} style={{ borderBottom:'1px solid #f9fafb', background: r.errors.length?'#fff8f8':'#fff' }}>
+                    <td style={{ padding:'7px 10px', color:T.gray }}>{r.row}</td>
+                    <td style={{ padding:'7px 10px', fontWeight:600 }}>{r.name}</td>
+                    <td style={{ padding:'7px 10px', fontFamily:'monospace' }}>{r.idNumber||'—'}</td>
+                    <td style={{ padding:'7px 10px', color:T.gray }}>{[r.phone,r.email].filter(Boolean).join(' · ')||'—'}</td>
+                    <td style={{ padding:'7px 10px' }}>{r.assignedName}</td>
+                    <td style={{ padding:'7px 10px' }}>
+                      {r.errors.length
+                        ? <span style={{ color:'#dc2626', fontWeight:600 }}>✗ {r.errors.join(', ')}</span>
+                        : <span style={{ color:'#059669', fontWeight:600 }}>✓ Ready</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:14 }}>
+            <button onClick={()=>setPreview(null)} style={{ padding:'9px 16px', borderRadius:8, border:`1px solid ${T.border}`, background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
+            <button onClick={createAll} disabled={!validCount}
+              style={{ padding:'9px 22px', borderRadius:8, border:'none', background: validCount?T.green:'#d1d5db', color:'#fff', fontSize:13, fontWeight:800, cursor: validCount?'pointer':'not-allowed', fontFamily:'inherit' }}>
+              Create {validCount} Case{validCount!==1?'s':''}
+            </button>
           </div>
         </div>
       )}

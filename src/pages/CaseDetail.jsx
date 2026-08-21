@@ -470,7 +470,34 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setT
   // Final step = last step in the workflow
   const isFinalStep = st => steps.length > 0 && steps[steps.length-1].id === st.id
   // Death/funeral claims carry the extra claim information
-  const isDeathClaim = /death|funeral/i.test(`${c.caseTypeName||''} ${c.caseCategory||''} ${c.masterCaseType||''}`)
+  // Death Claim Information applies ONLY to actual death claims. An explicit
+  // allow-list — a substring match wrongly caught "Extended Funeral Application",
+  // which is an APPLICATION for cover, not a claim against it.
+  const DEATH_CLAIM_TYPES = [
+    'Death - Funeral',
+    'Death - Extended Funeral',
+    'Death - Accidental Funeral',
+    'Death - Retirement',
+    'Death - GLA',
+    'Death - GEB',
+    'Death - GEB Review',
+  ]
+  const DEATH_CLAIM_CATEGORIES = [
+    'Funeral',
+    'Funeral - Flexicare',
+    'Funeral - Accident',
+    'Extended Funeral',
+    'GEB Claim',
+    'GLA Death Claim',
+    'GEB Review',
+    'Ret Death Claim',
+    'Trust Account - Minor',
+    'Estate Account',
+  ]
+  const isDeathClaim =
+       DEATH_CLAIM_TYPES.includes(c.caseTypeName)
+    || DEATH_CLAIM_CATEGORIES.includes(c.caseCategory)
+    || c.masterCaseType === 'Death'
 
   // Reuse the existing extraFields store — no duplicate fields created
   function saveExtra(key, value) {
