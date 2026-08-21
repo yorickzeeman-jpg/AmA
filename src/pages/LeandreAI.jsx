@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { T, businessDaysElapsed, businessDaysRemaining, escalationLevel } from '../data.js'
+import { T, businessDaysElapsed, businessDaysRemaining, escalationLevel, statsCases, statsUsers} from '../data.js'
 import { Card, Btn } from '../ui.jsx'
 
 // ── Business day wrappers ─────────────────────────────────────────────────────
@@ -75,9 +75,9 @@ export default function LeandreAI({ cases, billingTasks, employers, users, curre
 
     const pendingBilling = billingTasks.filter(bt => bt.billingStatus === 'Pending Review')
 
-    // Staff workloads
+    // Staff workloads — performance statistic, so Yorick's cases are excluded
     const workloads = {}
-    open.forEach(c => {
+    statsCases(open).forEach(c => {
       if (!c.assignedTo) return
       workloads[c.assignedTo] = (workloads[c.assignedTo] || 0) + 1
     })
@@ -419,7 +419,7 @@ export default function LeandreAI({ cases, billingTasks, employers, users, curre
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:20 }}>
               {users.filter(u=>['administrator','general_manager','billing_admin'].includes(u.role)&&u.status==='active').map(u=>{
                 const count    = stats.workloads[u.id] || 0
-                const breached = stats.slaBreachedCases.filter(c=>c.assignedTo===u.id).length
+                const breached = statsCases(stats.slaBreachedCases).filter(c=>c.assignedTo===u.id).length
                 const pct      = Math.max(...Object.values(stats.workloads||{0:1})) > 0
                   ? Math.round((count / Math.max(...Object.values(stats.workloads||{0:1}))) * 100)
                   : 0

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   T, CASE_STATUSES, PRIORITIES, genRef,
   STEP_STATUSES, STEP_STATUS_CONFIG,
-  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES, canReassignCase,
+  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES, canReassignCase, canEditCase,
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
@@ -12,7 +12,10 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 
   const isInternal = !['employer_admin','employer_user'].includes(currentUser.role)
   const isGM       = currentUser.role === 'general_manager'
-  const canEdit    = isInternal
+  // VIEW ALL, EDIT OWN: any authorised staff member may open this case, but
+  // editing is limited to the assignee, the creator, or admin/management.
+  const canEdit    = isInternal && canEditCase(currentUser, c)
+  const viewOnly   = isInternal && !canEdit
 
   const assignedUser = users.find(u => u.id === c.assignedTo)
   const employer     = employers.find(e => e.id === c.employerId)
@@ -94,6 +97,12 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
           {/* ── OVERVIEW ── */}
           {tab === 'Overview' && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              {viewOnly && (
+                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#1e40af', lineHeight:1.6 }}>
+                  <strong>View only.</strong> This case is assigned to {assignedUser?.name || 'someone else'}. You can see its
+                  status, workflow and history. To work on it, assign it to yourself using the Assigned To field below.
+                </div>
+              )}
               {/* Receive Notification: member financial position for review cases */}
               {['Member Review','Benefit Update'].includes(c.caseTypeName) && (
                 <MemberPosition c={c} members={members} currentUser={currentUser} onUpdate={onUpdate}/>
@@ -101,7 +110,8 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
               {/* Meta grid */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
                 {[
-                  ['Employer',    employer?.name || '—'],
+                  ['Participating Employer', c.extraFields?.participating_employer || employer?.name || '—'],
+                  ...(c.extraFields?.branch ? [['Branch', c.extraFields.branch]] : []),
                   ['SLA Due',     c.slaDate],
                   ['Created',     c.created],
                   ['Member',      c.memberName || '—'],
@@ -417,7 +427,7 @@ export default function CaseDetail({ c, employers, users, members = [], currentU
 function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab, onLaunchConsultation, onLaunchJourney }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
-  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
+  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role) && canEditCase(currentUser, c)
 
   const workflow = c.workflow || initWorkflow(c.caseTypeName)
   if (!workflow) {
@@ -461,7 +471,34 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setT
   // Final step = last step in the workflow
   const isFinalStep = st => steps.length > 0 && steps[steps.length-1].id === st.id
   // Death/funeral claims carry the extra claim information
-  const isDeathClaim = /death|funeral/i.test(`${c.caseTypeName||''} ${c.caseCategory||''} ${c.masterCaseType||''}`)
+  // Death Claim Information applies ONLY to actual death claims. An explicit
+  // allow-list — a substring match wrongly caught "Extended Funeral Application",
+  // which is an APPLICATION for cover, not a claim against it.
+  const DEATH_CLAIM_TYPES = [
+    'Death - Funeral',
+    'Death - Extended Funeral',
+    'Death - Accidental Funeral',
+    'Death - Retirement',
+    'Death - GLA',
+    'Death - GEB',
+    'Death - GEB Review',
+  ]
+  const DEATH_CLAIM_CATEGORIES = [
+    'Funeral',
+    'Funeral - Flexicare',
+    'Funeral - Accident',
+    'Extended Funeral',
+    'GEB Claim',
+    'GLA Death Claim',
+    'GEB Review',
+    'Ret Death Claim',
+    'Trust Account - Minor',
+    'Estate Account',
+  ]
+  const isDeathClaim =
+       DEATH_CLAIM_TYPES.includes(c.caseTypeName)
+    || DEATH_CLAIM_CATEGORIES.includes(c.caseCategory)
+    || c.masterCaseType === 'Death'
 
   // Reuse the existing extraFields store — no duplicate fields created
   function saveExtra(key, value) {
