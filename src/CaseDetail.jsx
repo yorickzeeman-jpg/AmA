@@ -1,18 +1,20 @@
-import { useState } from 'react'
 import {
   T, CASE_STATUSES, PRIORITIES, genRef,
   STEP_STATUSES, STEP_STATUS_CONFIG,
-  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES,
+  workflowProgress, currentStep, initWorkflow, WORKFLOW_TEMPLATES, canReassignCase, canEditCase,
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Tabs, Avatar, Btn, Card, inputSt } from '../ui.jsx'
 
-export default function CaseDetail({ c, employers, users, currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation }) {
+export default function CaseDetail({ c, employers, users, members = [], currentUser, onClose, onUpdate, onAddBillingTask, onLaunchInduction, onLaunchConsultation, onLaunchJourney }) {
   const [tab, setTab]   = useState('Overview')
   const [note, setNote] = useState('')
 
   const isInternal = !['employer_admin','employer_user'].includes(currentUser.role)
   const isGM       = currentUser.role === 'general_manager'
-  const canEdit    = isInternal
+  // VIEW ALL, EDIT OWN: any authorised staff member may open this case, but
+  // editing is limited to the assignee, the creator, or admin/management.
+  const canEdit    = isInternal && canEditCase(currentUser, c)
+  const viewOnly   = isInternal && !canEdit
 
   const assignedUser = users.find(u => u.id === c.assignedTo)
   const employer     = employers.find(e => e.id === c.employerId)
@@ -34,7 +36,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
   }
 
   function changeStatus(newStatus) {
-    onUpdate({ ...c, status: newStatus, audit: addAudit(`Status changed to ${newStatus}`, 'status') })
+    const resolvedDate = newStatus === 'Closed'
+      ? (c.resolvedDate || new Date().toISOString().split('T')[0])
+      : (c.resolvedDate || null)
+    onUpdate({ ...c, status: newStatus, resolvedDate, audit: addAudit(`Status changed to ${newStatus}`, 'status') })
   }
 
   function sendToBilling() {
@@ -91,6 +96,16 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
           {/* ── OVERVIEW ── */}
           {tab === 'Overview' && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              {viewOnly && (
+                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#1e40af', lineHeight:1.6 }}>
+                  <strong>View only.</strong> This case is assigned to {assignedUser?.name || 'someone else'}. You can see its
+                  status, workflow and history. To work on it, assign it to yourself using the Assigned To field below.
+                </div>
+              )}
+              {/* Receive Notification: member financial position for review cases */}
+              {['Member Review','Benefit Update'].includes(c.caseTypeName) && (
+                <MemberPosition c={c} members={members} currentUser={currentUser} onUpdate={onUpdate}/>
+              )}
               {/* Meta grid */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, background:'#f9fafb', borderRadius:10, padding:16, border:`1px solid ${T.border}` }}>
                 {[
@@ -99,6 +114,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                   ['Created',     c.created],
                   ['Member',      c.memberName || '—'],
                   ['Member ID',   c.memberId || '—'],
+                  ['Mobile',      c.memberPhone || '—'],
+                  ['Email',       c.memberEmail || '—'],
+                  ['Case Type',   c.masterCaseType || c.caseTypeName || '—'],
+                  ['Case Category', c.caseCategory || '—'],
                 ].map(([k,v]) => (
                   <div key={k}>
                     <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>{k}</div>
@@ -108,7 +127,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                 {/* Assigned To — with reassignment for managers/administrators */}
                 <div>
                   <div style={{ fontSize:10, color:T.gray, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3 }}>Assigned To</div>
-                  {['general_manager','administrator'].includes(currentUser.role) ? (
+                  {canReassignCase(currentUser, c) ? (
                     <select
                       value={c.assignedTo || ''}
                       onChange={e => {
@@ -128,11 +147,28 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                       style={{ ...inputSt, padding:'6px 10px', fontSize:13, fontWeight:600 }}>
                       <option value="">Unassigned</option>
                       {users.filter(u => !['employer_admin','employer_user'].includes(u.role) && u.status==='active').map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                        <option key={u.id} value={u.id}>{u.name}{u.id===currentUser.id?' (me)':''}</option>
                       ))}
                     </select>
                   ) : (
                     <div style={{ fontSize:13, fontWeight:500, color:T.text }}>{assignedUser?.name || 'Unassigned'}</div>
+                  )}
+                  {canReassignCase(currentUser, c) && c.assignedTo !== currentUser.id && (
+                    <button onClick={() => {
+                        const prev = users.find(u => u.id === c.assignedTo)
+                        onUpdate({
+                          ...c,
+                          assignedTo: currentUser.id,
+                          ownerHistory: [...(c.ownerHistory||[]), { user:currentUser.id, from:new Date().toISOString().split('T')[0] }],
+                          audit: [...(c.audit||[]), {
+                            time: new Date().toISOString(), user: currentUser.id, type:'assign',
+                            action: `Case self-assigned: ${prev?.name || 'Unassigned'} → ${currentUser.name}`,
+                          }],
+                        })
+                      }}
+                      style={{ marginTop:6, fontSize:11, fontWeight:700, color:T.blue, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+                      Assign to me
+                    </button>
                   )}
                 </div>
               </div>
@@ -233,13 +269,13 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
               )}
 
               {/* Digital Induction + Financial Consultation for New Employee cases */}
-              {c.caseTypeName === 'New' && (onLaunchInduction || onLaunchConsultation) && (
+              {['New','Member Review','Benefit Update'].includes(c.caseTypeName) && (onLaunchInduction || onLaunchConsultation) && (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   {onLaunchConsultation && (
                     <div style={{ background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
                       <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>📊 Financial Consultation Workspace</div>
                       <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
-                        Guided 7-step consultation — loads employer benefits automatically, calculates contributions, checks underwriting, projects retirement, generates adviser insights and creates actions.
+                        Guided consultation — loads {c.memberName || 'the member'}'s salary, AVCs, fund value and date of birth automatically, calculates contributions, checks underwriting, projects retirement and generates adviser insights.
                       </div>
                       <button onClick={() => onLaunchConsultation(c)}
                         style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:T.navy, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
@@ -247,7 +283,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
                       </button>
                     </div>
                   )}
-                  {onLaunchInduction && (
+                  {onLaunchInduction && c.caseTypeName === 'New' && (
                     <div style={{ background:`linear-gradient(135deg,#059669,#047857)`, borderRadius:11, padding:'16px 18px', color:'#fff' }}>
                       <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>🎯 Digital Induction Wizard</div>
                       <div style={{ fontSize:11, opacity:0.8, marginBottom:12, lineHeight:1.5 }}>
@@ -287,7 +323,7 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 
           {/* ── WORKFLOW ── */}
           {tab === 'Workflow' && (
-            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask}/>
+            <WorkflowPanel c={c} users={users} currentUser={currentUser} onUpdate={onUpdate} onAddBillingTask={onAddBillingTask} setTab={setTab} onLaunchConsultation={onLaunchConsultation} onLaunchJourney={onLaunchJourney}/>
           )}
 
           {/* ── DOCUMENTS ── */}
@@ -386,10 +422,10 @@ export default function CaseDetail({ c, employers, users, currentUser, onClose, 
 // ═════════════════════════════════════════════════════════════════════════════
 // WORKFLOW PANEL — interactive step management
 // ═════════════════════════════════════════════════════════════════════════════
-function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
+function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask, setTab, onLaunchConsultation, onLaunchJourney }) {
   const [expandedStep, setExpanded] = useState(null)
   const [stepNotes, setStepNotes]   = useState({})
-  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role)
+  const canEdit = !['employer_admin','employer_user'].includes(currentUser.role) && canEditCase(currentUser, c)
 
   const workflow = c.workflow || initWorkflow(c.caseTypeName)
   if (!workflow) {
@@ -413,7 +449,10 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
 
   function updateStep(stepId, updates) {
     const step     = steps.find(s => s.id === stepId)
-    const newSteps = steps.map(s => s.id === stepId ? { ...s, ...updates } : s)
+    // Carry any typed-but-unsaved comment through so status changes never lose it
+    const typed    = stepNotes[stepId]
+    const withNote = typed !== undefined ? { notes: typed } : {}
+    const newSteps = steps.map(s => s.id === stepId ? { ...s, ...withNote, ...updates } : s)
     const newWf    = { ...workflow, steps: newSteps, completedAt: newSteps.every(s=>s.status==='Completed'||s.status==='Skipped') ? new Date().toISOString() : null }
     const audit    = [...(c.audit||[]), {
       time:   new Date().toISOString(),
@@ -422,6 +461,108 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
       type:   'workflow',
     }]
     onUpdate({ ...c, workflow: newWf, audit })
+  }
+
+  // FIX: step comments previously lived only in local state and were written
+  // to the case solely by completeStep — so any other action, or leaving the
+  // case, silently discarded them. Now saved on blur against the workflow step.
+  // Final step = last step in the workflow
+  const isFinalStep = st => steps.length > 0 && steps[steps.length-1].id === st.id
+  // Death/funeral claims carry the extra claim information
+  // Death Claim Information applies ONLY to actual death claims. An explicit
+  // allow-list — a substring match wrongly caught "Extended Funeral Application",
+  // which is an APPLICATION for cover, not a claim against it.
+  const DEATH_CLAIM_TYPES = [
+    'Death - Funeral',
+    'Death - Extended Funeral',
+    'Death - Accidental Funeral',
+    'Death - Retirement',
+    'Death - GLA',
+    'Death - GEB',
+    'Death - GEB Review',
+  ]
+  const DEATH_CLAIM_CATEGORIES = [
+    'Funeral',
+    'Funeral - Flexicare',
+    'Funeral - Accident',
+    'Extended Funeral',
+    'GEB Claim',
+    'GLA Death Claim',
+    'GEB Review',
+    'Ret Death Claim',
+    'Trust Account - Minor',
+    'Estate Account',
+  ]
+  const isDeathClaim =
+       DEATH_CLAIM_TYPES.includes(c.caseTypeName)
+    || DEATH_CLAIM_CATEGORIES.includes(c.caseCategory)
+    || c.masterCaseType === 'Death'
+
+  // Reuse the existing extraFields store — no duplicate fields created
+  function saveExtra(key, value) {
+    if ((c.extraFields?.[key] || '') === value) return
+    onUpdate({
+      ...c,
+      extraFields: { ...(c.extraFields||{}), [key]: value },
+      audit: [...(c.audit||[]), {
+        time: new Date().toISOString(), user: currentUser.id,
+        action: `Claim information updated — ${key.replace(/_/g,' ')}: ${value || '(cleared)'}`, type:'update',
+      }],
+    })
+  }
+
+  // FIX: complete the final step AND close the case in one explicit action
+  function completeAndClose(s) {
+    if (isDeathClaim) {
+      const missing = [
+        ['Cause of Death',        c.extraFields?.natural_unnatural],
+        ['Relationship to Member',c.extraFields?.relationship],
+        ['Amount Paid',           c.extraFields?.amount_paid],
+      ].filter(([,v]) => !v).map(([l]) => l)
+      if (missing.length) {
+        alert(`Death Claim Information incomplete.\n\nRequired before closing:\n\n${missing.map(m=>`✗ ${m}`).join('\n')}`)
+        return
+      }
+    }
+    if (s.requiredDocs?.length > 0 && (c.documents?.length || 0) < s.requiredDocs.length) {
+      alert(`Required documents outstanding for "${s.name}":\n\n${s.requiredDocs.slice(c.documents?.length||0).map(d=>`✗ ${d}`).join('\n')}`)
+      return
+    }
+    if (!window.confirm('Are you sure you want to complete and close this case?')) return
+
+    const now      = new Date().toISOString()
+    const finalNote = stepNotes[s.id] ?? s.notes ?? ''
+    const newSteps = steps.map(x => x.id === s.id
+      ? { ...x, status:'Completed', completedAt:now, notes:finalNote, noteBy:currentUser.id, noteAt:now }
+      : x)
+    onUpdate({
+      ...c,
+      status:       'Closed',
+      resolvedDate: c.resolvedDate || now.split('T')[0],
+      closedBy:     currentUser.id,
+      closedAt:     now,
+      workflow:     { ...workflow, steps:newSteps, completedAt:now },
+      audit: [...(c.audit||[]), {
+        time: now, user: currentUser.id, type:'status',
+        action: `Case closed from final step "${s.name}" by ${currentUser.name}. Previous status: ${c.status}. Workflow 100% complete.${finalNote?` Final comment: ${finalNote.slice(0,150)}`:''}`,
+      }],
+    })
+    setTab('Overview')
+  }
+
+  function saveStepNote(s) {
+    const text = stepNotes[s.id]
+    if (text === undefined || text === (s.notes || '')) return
+    const newSteps = steps.map(x => x.id === s.id
+      ? { ...x, notes: text, noteBy: currentUser.id, noteAt: new Date().toISOString() }
+      : x)
+    const audit = [...(c.audit||[]), {
+      time:   new Date().toISOString(),
+      user:   currentUser.id,
+      action: `Comment saved on step "${s.name}": ${text.slice(0,120)}${text.length>120?'…':''}`,
+      type:   'note',
+    }]
+    onUpdate({ ...c, workflow: { ...workflow, steps:newSteps }, audit })
   }
 
   function completeStep(s) {
@@ -534,7 +675,7 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                   )}
 
                   {/* Allocation control — rendered on any "Allocate" step */}
-                  {canEdit && /allocat/i.test(s.name) && (
+                  {canReassignCase(currentUser, c) && /allocat/i.test(s.name) && (
                     <div style={{ marginBottom:12, background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:9, padding:'11px 14px' }}>
                       <label style={{ fontSize:11, fontWeight:700, color:T.navy, display:'block', marginBottom:6 }}>Allocate this case to</label>
                       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
@@ -561,6 +702,67 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                     </div>
                   )}
 
+                  {/* Death Claim Information — final step of a death/funeral claim */}
+                  {canEdit && isFinalStep(s) && isDeathClaim && (
+                    <div style={{ marginBottom:12, background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:10, padding:'13px 15px' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'#c2410c', marginBottom:3 }}>Death Claim Information</div>
+                      <div style={{ fontSize:11, color:T.gray, marginBottom:10 }}>Complete before finalising the claim.</div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Cause of Death <span style={{color:T.red}}>*</span></label>
+                          <select value={c.extraFields?.natural_unnatural || ''} onChange={e=>saveExtra('natural_unnatural', e.target.value)} style={inputSt}>
+                            <option value="">Select…</option>
+                            <option>Natural</option>
+                            <option>Unnatural</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Relationship to Member <span style={{color:T.red}}>*</span></label>
+                          <input defaultValue={c.extraFields?.relationship || ''} onBlur={e=>saveExtra('relationship', e.target.value)}
+                            placeholder="Main Member, Spouse, Child…" style={inputSt}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Amount Paid (R) <span style={{color:T.red}}>*</span></label>
+                          <input type="number" defaultValue={c.extraFields?.amount_paid || ''} onBlur={e=>saveExtra('amount_paid', e.target.value)}
+                            placeholder="0.00" style={inputSt}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, fontWeight:700, color:T.gray, textTransform:'uppercase', display:'block', marginBottom:4 }}>Date Claim Paid</label>
+                          <input type="date" defaultValue={c.extraFields?.date_claim_paid || ''} onBlur={e=>saveExtra('date_claim_paid', e.target.value)} style={inputSt}/>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Launch the EXISTING Financial Wizard from the consultation /
+                      projection steps, and the Better Financial Journey from its step. */}
+                  {canEdit && /financial consultation|retirement projection/i.test(s.name) && onLaunchConsultation && (
+                    <div style={{ marginBottom:12, background:`linear-gradient(135deg,${T.navy},#1a3a6b)`, borderRadius:10, padding:'14px 16px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:3 }}>Financial Wizard</div>
+                      <div style={{ fontSize:11, opacity:0.75, lineHeight:1.55, marginBottom:11 }}>
+                        Opens with {c.memberName || 'this member'}'s details already loaded — salary, AVCs, fund value and
+                        date of birth pull through from the case. The retirement projection runs inside the wizard.
+                      </div>
+                      <button onClick={() => onLaunchConsultation(c)}
+                        style={{ padding:'9px 18px', background:'#fff', border:'none', borderRadius:8, color:T.navy, fontSize:12.5, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
+                        ⚡ Open Financial Wizard →
+                      </button>
+                    </div>
+                  )}
+                  {canEdit && /better financial journey/i.test(s.name) && onLaunchJourney && (
+                    <div style={{ marginBottom:12, background:'linear-gradient(135deg,#0b1220,#1b1440)', borderRadius:10, padding:'14px 16px', color:'#fff' }}>
+                      <div style={{ fontSize:13, fontWeight:800, marginBottom:3 }}>Better Financial Journey</div>
+                      <div style={{ fontSize:11, opacity:0.75, lineHeight:1.55, marginBottom:11 }}>
+                        Transfer Boost · Contribution Boost · Long-term modelling · Discovery ecosystem.
+                        {!c.consultationResult && ' Complete the Financial Wizard first so the journey has the member\'s position.'}
+                      </div>
+                      <button onClick={() => onLaunchJourney(c)} disabled={!c.consultationResult}
+                        style={{ padding:'9px 18px', background: c.consultationResult ? '#fff' : 'rgba(255,255,255,0.25)', border:'none', borderRadius:8, color: c.consultationResult ? '#1b1440' : 'rgba(255,255,255,0.6)', fontSize:12.5, fontWeight:800, cursor: c.consultationResult ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
+                        ⚡ Open Better Financial Journey →
+                      </button>
+                    </div>
+                  )}
+
                   {/* Notes */}
                   {canEdit && (
                     <div style={{ marginBottom:10 }}>
@@ -568,9 +770,15 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                       <textarea
                         value={stepNotes[s.id] ?? s.notes ?? ''}
                         onChange={e => setStepNotes(n => ({...n, [s.id]: e.target.value}))}
+                        onBlur={() => saveStepNote(s)}
                         placeholder="Add notes for this step…"
                         style={{ ...inputSt, minHeight:60, resize:'vertical', width:'100%' }}
                       />
+                      {s.notes && (
+                        <div style={{ fontSize:10, color:'#059669', marginTop:4 }}>
+                          ✓ Saved{s.noteAt ? ` ${s.noteAt.split('T')[0]}` : ''}{s.noteBy ? ` by ${users.find(u=>u.id===s.noteBy)?.name || ''}` : ''}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -586,10 +794,16 @@ function WorkflowPanel({ c, users, currentUser, onUpdate, onAddBillingTask }) {
                           </button>
                         )
                       })}
-                      {s.status !== 'Completed' && (
+                      {s.status !== 'Completed' && !isFinalStep(s) && (
                         <button onClick={() => completeStep(s)}
                           style={{ padding:'5px 14px', borderRadius:20, background:T.green, border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
                           ✓ Mark Complete
+                        </button>
+                      )}
+                      {isFinalStep(s) && c.status !== 'Closed' && (
+                        <button onClick={() => completeAndClose(s)}
+                          style={{ padding:'6px 16px', borderRadius:20, background:T.navy, border:'none', color:'#fff', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>
+                          ✓ Complete &amp; Close Case
                         </button>
                       )}
                     </div>
@@ -754,6 +968,77 @@ function LeandrePanel({ c, users, currentUser, onGoWorkflow, onGoDocs }) {
           Work the Steps →
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── MEMBER FINANCIAL POSITION (Member Review / Benefit Update) ──────────────
+// Pulls from the membership register via the case's member ID. Missing values
+// are shown as missing and captured here — never silently defaulted.
+function MemberPosition({ c, members, currentUser, onUpdate }) {
+  const reg = (members||[]).find(m =>
+    (c.memberId && (m.idNumber===c.memberId || m.payrollNumber===c.memberId || m.membershipNo===c.memberId)) ||
+    (c.memberName && `${m.memberName||''} ${m.surname||''}`.trim().toLowerCase() === c.memberName.trim().toLowerCase())
+  ) || null
+
+  // Case overrides win over the register (advisor captured a missing value)
+  const ov = c.memberFinancials || {}
+  const val = k => ov[k] ?? reg?.[k] ?? null
+  const R = v => (v||v===0) ? 'R'+Number(v).toLocaleString('en-ZA') : null
+
+  function capture(key, raw) {
+    const v = key==='dateOfBirth' ? raw : (parseFloat(String(raw).replace(/[R,\s]/g,'')) || null)
+    if (v === null || v === '') return
+    onUpdate({
+      ...c,
+      memberFinancials: { ...(c.memberFinancials||{}), [key]: v },
+      audit: [...(c.audit||[]), { time:new Date().toISOString(), user:currentUser.id, type:'update',
+        action:`Member financial position captured — ${key}: ${v}` }],
+    })
+  }
+
+  const rows = [
+    ['Individual Salary',        'salary',      R(val('salary')),      'monthly'],
+    ['AVCs',                     'avc',         R(val('avc')),         'monthly'],
+    ['Current Retirement Fund Value','fundValue',R(val('fundValue')),  'current'],
+    ['Date of Birth',            'dateOfBirth', val('dateOfBirth'),    ''],
+  ]
+  const missing = rows.filter(([,,v]) => !v).length
+
+  return (
+    <div style={{ background:'#fff', border:`1px solid ${missing?'#fed7aa':T.border}`, borderRadius:11, padding:'14px 16px', marginBottom:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ fontSize:11, fontWeight:800, color:T.navy, textTransform:'uppercase', letterSpacing:'0.6px' }}>Member Financial Position</div>
+        {missing>0 && <span style={{ fontSize:10, fontWeight:700, color:'#c2410c', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:12, padding:'2px 9px' }}>{missing} missing</span>}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:10 }}>
+        {[['Member', c.memberName||'—'],['Member ID', c.memberId||'—'],
+          ['Employer', reg?.employerId ? undefined : undefined]].slice(0,2).map(([l,v])=>(
+          <div key={l} style={{ background:'#f9fafb', borderRadius:8, padding:'9px 11px' }}>
+            <div style={{ fontSize:9, color:T.gray, textTransform:'uppercase', marginBottom:2 }}>{l}</div>
+            <div style={{ fontSize:12.5, fontWeight:700 }}>{v}</div>
+          </div>
+        ))}
+        {rows.map(([label,key,value,note])=>(
+          <div key={key} style={{ background: value?'#f9fafb':'#fff7ed', borderRadius:8, padding:'9px 11px', border: value?'none':'1px solid #fed7aa' }}>
+            <div style={{ fontSize:9, color:T.gray, textTransform:'uppercase', marginBottom:2 }}>{label}</div>
+            {value ? (
+              <div style={{ fontSize:13, fontWeight:800, color:T.navy }}>{value}{note && <span style={{ fontSize:9, color:T.gray, fontWeight:400 }}> /{note}</span>}</div>
+            ) : (
+              <input
+                type={key==='dateOfBirth'?'date':'number'}
+                onBlur={e=>capture(key, e.target.value)}
+                placeholder="Not on record — capture"
+                style={{ ...inputSt, padding:'5px 8px', fontSize:12 }}/>
+            )}
+          </div>
+        ))}
+      </div>
+      {!reg && (
+        <div style={{ marginTop:9, fontSize:11, color:'#92400e' }}>
+          Member not matched in the membership register — values captured here are saved to the case.
+        </div>
+      )}
     </div>
   )
 }
