@@ -210,10 +210,10 @@ export default function ReportsPage({ cases: allCases, caseTypes, categories, em
 
         {/* Funeral Claims by Participating Employer */}
         <Card>
-          <CardHead title="Funeral Claims by Participating Employer" />
+          <CardHead title="Cases by Participating Employer" />
           <div style={{ padding:'14px 18px' }}>
             {funeralByEmployer.length === 0 ? (
-              <div style={{ fontSize:12, color:T.gray, textAlign:'center', padding:'12px 0' }}>No funeral claims registered yet.</div>
+              <div style={{ fontSize:12, color:T.gray, textAlign:'center', padding:'12px 0' }}>No cases with a participating employer yet.</div>
             ) : (
               <>
                 {funeralByEmployer.map(emp => (

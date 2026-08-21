@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   T, genRef, calcSlaDate, allocateCase, addBusinessDays, slaStatus, ROUND_ROBIN_MEMBER_IDS,
   WORKFLOW_TEMPLATES, WORKFLOW_CATEGORIES, CASE_TYPES_BY_CATEGORY,
@@ -7,6 +7,7 @@ import {
 } from '../data.js'
 import { Icon, StatusBadge, PriorityBadge, SLAChip, Card, Btn, Modal, Field, inputSt, selectSt, Empty } from '../ui.jsx'
 import { CASE_CONFIG, CASE_TYPE_LIST, categoriesForType, findConfig, slaDueDate } from '../caseConfig.js'
+import { fetchFuneralEmployers } from '../supabase.js'
 
 // ─── DOCUMENT UPLOAD ZONE (unchanged from v15) ────────────────────────────────
 const ACCEPTED_TYPES = {
@@ -240,6 +241,13 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
   const [selectedType, setType]    = useState('')   // template key
   const [cfgType, setCfgType]      = useState('')   // master Case Type (Excel)
   const [cfgCategory, setCfgCat]   = useState('')   // master Case Category (Excel)
+  // Participating employers (AMCU scheme) — available on ANY case type, not just claims
+  const [schemeEmployers, setSchemeEmployers] = useState([])
+  const [peName, setPeName]        = useState('')
+  const [peBranch, setPeBranch]    = useState('')
+  useEffect(() => { fetchFuneralEmployers().then(setSchemeEmployers) }, [])
+  const peNames = [...new Set(schemeEmployers.map(r => r.name))].sort()
+  const peBranches = [...new Set(schemeEmployers.filter(r => r.name === peName && r.branch).map(r => r.branch))].sort()
   const [attachedFiles, setFiles]  = useState([])
   const [form, setForm] = useState({
     employerId: isEmployer ? currentUser.employer : '',
@@ -310,7 +318,11 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
         : addBusinessDays(new Date().toISOString().split('T')[0], template?.slaDays || 5),
       slaDays: effSlaDays,
       description: form.description,
-      extraFields:  form.extraFields || {},
+      extraFields:  {
+        ...(form.extraFields || {}),
+        ...(peName   ? { participating_employer: peName } : {}),
+        ...(peBranch ? { branch: peBranch } : {}),
+      },
       billingTaskId:null,
       workflow: wf,
       notes:[], documents, audit,
@@ -476,6 +488,26 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
                   </select>
                 </Field>
               )}
+              {/* Participating employer — available on EVERY case type, so weekly
+                  stats can be broken down per PE (not just funeral claims) */}
+              {!isEmployer && peNames.length > 0 && (
+                <>
+                  <Field label="Participating Employer">
+                    <select value={peName} onChange={e=>{ setPeName(e.target.value); setPeBranch('') }} style={selectSt}>
+                      <option value="">Not applicable</option>
+                      {peNames.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </Field>
+                  {peName && peBranches.length > 0 && (
+                    <Field label="Branch">
+                      <select value={peBranch} onChange={e=>setPeBranch(e.target.value)} style={selectSt}>
+                        <option value="">Select branch…</option>
+                        {peBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </>
+              )}
               <Field label="Member Name"><input value={form.memberName} onChange={e=>set('memberName',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
               <Field label="Member ID Number"><input value={form.memberId} onChange={e=>set('memberId',e.target.value)} style={inputSt} placeholder="13-digit SA ID / reference"/></Field>
               <Field label="Member Mobile Number"><input value={form.memberPhone} onChange={e=>set('memberPhone',e.target.value)} style={inputSt} placeholder="Optional"/></Field>
@@ -563,6 +595,12 @@ function NewCaseModal({ employers, users, currentUser, workspace, cases=[], onCl
 // workflow template, SLA config and round-robin pool — nothing duplicated.
 function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onClose, onSubmitAll }) {
   const [employerId, setEmployerId] = useState('')
+  const [bulkPe, setBulkPe]         = useState('')
+  const [bulkBranch, setBulkBranch] = useState('')
+  const [schemeEmps, setSchemeEmps] = useState([])
+  useEffect(() => { fetchFuneralEmployers().then(setSchemeEmps) }, [])
+  const bulkPeNames = [...new Set(schemeEmps.map(r => r.name))].sort()
+  const bulkBranches = [...new Set(schemeEmps.filter(r => r.name === bulkPe && r.branch).map(r => r.branch))].sort()
   const [raw, setRaw]               = useState('')
   const [caseType, setCaseType]     = useState('Member Review')
   const [preview, setPreview]       = useState(null)
@@ -625,7 +663,11 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
         slaDate: slaDueDate(today, cfg?.slaDays || 5),
         slaDays: cfg?.slaDays || 5,
         description: `${caseType} — bulk upload for ${emp?.name || 'employer'}`,
-        extraFields:{}, billingTaskId:null,
+        extraFields:{
+          ...(bulkPe     ? { participating_employer: bulkPe } : {}),
+          ...(bulkBranch ? { branch: bulkBranch } : {}),
+        },
+        billingTaskId:null,
         workflow: initWorkflow(caseType),
         notes:[], documents:[],
         audit:[
@@ -659,6 +701,22 @@ function BulkMemberReviewModal({ employers, users, cases = [], currentUser, onCl
                 <option>Benefit Update</option>
               </select>
             </Field>
+            {bulkPeNames.length > 0 && (
+              <Field label="Participating Employer">
+                <select value={bulkPe} onChange={e=>{ setBulkPe(e.target.value); setBulkBranch('') }} style={selectSt}>
+                  <option value="">Not applicable</option>
+                  {bulkPeNames.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </Field>
+            )}
+            {bulkPe && bulkBranches.length > 0 && (
+              <Field label="Branch">
+                <select value={bulkBranch} onChange={e=>setBulkBranch(e.target.value)} style={selectSt}>
+                  <option value="">Select branch…</option>
+                  {bulkBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </Field>
+            )}
           </div>
 
           <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:9, padding:'11px 14px', marginBottom:12, fontSize:12, color:'#1e40af', lineHeight:1.6 }}>
